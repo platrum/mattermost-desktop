@@ -352,7 +352,7 @@ export function createTemplate(config: Config, updateManager: UpdateManager) {
         },
     });
 
-    template.push({id: 'help', label: localizeMessage('main.menus.app.help', 'Hel&p'), submenu});
+    // template.push({id: 'help', label: localizeMessage('main.menus.app.help', 'Hel&p'), submenu});
     return template;
 }
 

@@ -69,7 +69,7 @@ const WelcomeScreenModalWrapper = () => {
 
     return (
         <IntlProvider>
-            {getStarted ? (
+            {true ? (
                 <ConfigureServer
                     mobileView={mobileView}
                     darkMode={darkMode}

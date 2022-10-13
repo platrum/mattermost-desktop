@@ -94,6 +94,7 @@ class NewTeamModal extends React.PureComponent<Props, State> {
 
     handleTeamNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         this.setState({
+            teamUrl: `https://${e.target.value}.chat.platrum.ru`,
             teamName: e.target.value,
         });
     }
@@ -149,7 +150,7 @@ class NewTeamModal extends React.PureComponent<Props, State> {
 
     handleTeamUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const teamUrl = e.target.value;
-        this.setState({teamUrl});
+        this.setState({teamUrl, teamName: e.target.value});
     }
 
     addProtocolToUrl = (teamUrl: string): Promise<void> => {
@@ -200,7 +201,7 @@ class NewTeamModal extends React.PureComponent<Props, State> {
     }
 
     save = async () => {
-        await this.addProtocolToUrl(this.state.teamUrl);
+        // await this.addProtocolToUrl(this.state.teamUrl);
         this.setState({
             saveStarted: true,
         }, () => {
@@ -286,7 +287,7 @@ class NewTeamModal extends React.PureComponent<Props, State> {
 
                 <Modal.Body>
                     <form>
-                        <FormGroup>
+                        {false && <FormGroup>
                             <FormLabel>
                                 <FormattedMessage
                                     id='renderer.components.newTeamModal.serverURL'
@@ -297,7 +298,6 @@ class NewTeamModal extends React.PureComponent<Props, State> {
                                 id='teamUrlInput'
                                 type='text'
                                 value={this.state.teamUrl}
-                                placeholder='https://example.com'
                                 onChange={this.handleTeamUrlChange}
                                 onClick={(e: React.MouseEvent<HTMLInputElement>) => {
                                     e.stopPropagation();
@@ -318,7 +318,7 @@ class NewTeamModal extends React.PureComponent<Props, State> {
                                     defaultMessage='The URL of your Mattermost server. Must start with http:// or https://.'
                                 />
                             </FormText>
-                        </FormGroup>
+                        </FormGroup>}
                         <FormGroup className='NewTeamModal-noBottomSpace'>
                             <FormLabel>
                                 <FormattedMessage

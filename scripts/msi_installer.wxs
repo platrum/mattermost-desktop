@@ -35,12 +35,12 @@
   - there are any changes in the feature hierarchy (child
     feature moving out of a parent, or a parent feature getting a new child).
   -->
-  <Product Id="*" UpgradeCode="8523DAF0-699D-4CC7-9A65-C5E696A9DE6D" Name="Mattermost" Manufacturer="Mattermost, Inc." Language="1033" Codepage="1252" Version="0.0.0">
+  <Product Id="*" UpgradeCode="8523DAF0-699D-4CC7-9A65-C5E696A9DE6D" Name="Mattermost" Manufacturer="Platrum" Language="1033" Codepage="1252" Version="0.0.0">
     <!--
     perMachine installs the app system wide (ALLUSERS is set to 1)
     src.: https://www.joyofsetup.com/2008/04/01/new-wix-feature-setting-package-installation-scope/
     -->
-    <Package Id="*" Keywords="Installer" Description="Mattermost Installer" Manufacturer="Mattermost, Inc." InstallerVersion="400" Languages="1033" Compressed="yes" SummaryCodepage="1252" Platform="$(var.Platform)" InstallScope="perMachine" />
+    <Package Id="*" Keywords="Installer" Description="Mattermost Installer" Manufacturer="Platrum" InstallerVersion="400" Languages="1033" Compressed="yes" SummaryCodepage="1252" Platform="$(var.Platform)" InstallScope="perMachine" />
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
     <!--
     Perform OS check requirements only if we are installing (not on repair/

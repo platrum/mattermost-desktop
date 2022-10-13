@@ -45,19 +45,22 @@
   stroke-dashoffset: var(--animation-spinner-mask-stroke-length);
 }
 .LoadingAnimation .LoadingAnimation__compass {
-  opacity: 1;
+  opacity: 0;
   transform: scale3d(1, 1, 1);
 }
 .LoadingAnimation .LoadingAnimation__compass-needle-container {
+  opacity: 0;
   transform: scale3d(1, 1, 1);
 }
 .LoadingAnimation .LoadingAnimation__compass-needle,
 .LoadingAnimation .LoadingAnimation__compass-needle-front-mask,
 .LoadingAnimation .LoadingAnimation__compass-needle-behind-mask {
+  opacity: 0;
   transform-origin: 54px 46px;
   transform: rotate3d(0, 0, 1, 0deg);
 }
 .LoadingAnimation .LoadingAnimation__compass-base-mask-container {
+  opacity: 0;
   transform: rotate3d(0, 0, 1, -86deg);
 }
 .LoadingAnimation .LoadingAnimation__compass-base-mask {

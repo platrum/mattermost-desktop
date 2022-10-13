@@ -5,7 +5,7 @@
     "url": "https://releases.mattermost.com/desktop"
     }
   ],
-  "appId": "Mattermost.Desktop",
+  "appId": "Platrum.Desktop",
   "artifactName": "${version}/${name}-${version}-${os}-${arch}.${ext}",
   "directories": {
     "buildResources": "src/assets",
@@ -38,7 +38,7 @@
   "afterAllArtifactBuild": "scripts/afterbuild.js",
   "deb": {
     "artifactName": "${version}/${name}_${version}-1_${arch}.${ext}",
-    "synopsis": "Mattermost Desktop App",
+    "synopsis": "Platrum Chat App",
     "depends": [
       "gconf2",
       "gconf-service",
@@ -100,8 +100,8 @@
     "entitlements": "./entitlements.mac.plist",
     "entitlementsInherit": "./entitlements.mac.plist",
     "extendInfo": {
-      "NSMicrophoneUsageDescription": "Microphone access may be used by Mattermost plugins, such as Jitsi video conferencing.",
-      "NSCameraUsageDescription": "Camera access may be used by Mattermost plugins, such as Jitsi video conferencing.",
+      "NSMicrophoneUsageDescription": "Microphone access may be used by Platrum Chat plugins, such as Jitsi video conferencing.",
+      "NSCameraUsageDescription": "Camera access may be used by Platrum Chat plugins, such as Jitsi video conferencing.",
       "LSFileQuarantineEnabled": true
   }
   },
@@ -156,7 +156,7 @@
         ]
       }
     ],
-    "publisherName": "CN=\"Mattermost, Inc.\", O=\"Mattermost, Inc.\", L=Palo Alto, S=California, C=US"
+    "publisherName": "CN=\"Platrum\", O=\"Platrum\""
   },
   "nsis": {
     "artifactName": "${version}/${name}-setup-${version}-win.${ext}"
