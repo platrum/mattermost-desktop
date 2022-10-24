@@ -1,19 +1,19 @@
 {
-  "name": "mattermost-desktop",
-  "productName": "Mattermost",
-  "version": "5.2.0-develop.1",
-  "description": "Mattermost",
+  "name": "platrum-chat",
+  "productName": "Platrum Chat",
+  "version": "5.2.0",
+  "description": "Platrum Chat",
   "main": "dist/index.js",
-  "author": "Mattermost, Inc. <feedback@mattermost.com>",
+  "author": "Platrum <support@platrum.ru>",
   "license": "Apache-2.0",
-  "desktopName": "Mattermost.Desktop",
-  "homepage": "https://mattermost.com",
+  "desktopName": "Platrum.Chat",
+  "homepage": "https://platrum.com",
   "engines": {
     "node": ">=16.16.0"
   },
   "repository": {
     "type": "git",
-    "url": "git://github.com/mattermost/desktop.git"
+    "url": "git://github.com/platrum/mattermost-desktop.git"
   },
   "config": {
     "target": "21.1.0",

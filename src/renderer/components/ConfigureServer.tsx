@@ -74,6 +74,7 @@ function ConfigureServer({
     }, []);
 
     const checkProtocolInURL = (checkURL: string): Promise<string> => {
+        checkURL = `https://${checkURL}.chat.platrum.ru`;
         if (urlUtils.startsWithProtocol(checkURL)) {
             return Promise.resolve(checkURL);
         }
@@ -128,6 +129,7 @@ function ConfigureServer({
     };
 
     const validateURL = async (fullURL: string) => {
+        return '';
         if (!fullURL) {
             return formatMessage({
                 id: 'renderer.components.newTeamModal.error.urlRequired',
@@ -168,6 +170,9 @@ function ConfigureServer({
     };
 
     const handleURLOnChange = ({target: {value}}: React.ChangeEvent<HTMLInputElement>) => {
+        setName(value);
+        setUrl(value);
+        return;
         setUrl(value);
 
         if (urlError) {
@@ -260,10 +265,10 @@ function ConfigureServer({
             )}
         >
             <LoadingBackground/>
-            <Header
+            {false && <Header
                 darkMode={darkMode}
                 alternateLink={mobileView ? getAlternateLink() : undefined}
-            />
+            />}
             {showContent && (
                 <div className='ConfigureServer__body'>
                     {!mobileView && getAlternateLink()}
@@ -273,22 +278,22 @@ function ConfigureServer({
                                 {messageTitle || formatMessage({id: 'renderer.components.configureServer.title', defaultMessage: 'Let’s connect to a server'})}
                             </h1>
                             <p className='ConfigureServer__message-subtitle'>
-                                {messageSubtitle || (
+                                {false && (messageSubtitle || (
                                     <FormattedMessage
                                         id='renderer.components.configureServer.subtitle'
                                         defaultMessage='Set up your first server to connect to your<br></br>team’s communication hub'
                                         values={{
                                             br: (x: React.ReactNode) => (<><br/>{x}</>),
                                         }}
-                                    />)
+                                    />))
                                 }
                             </p>
-                            <div className='ConfigureServer__message-img'>
+                            {false && <div className='ConfigureServer__message-img'>
                                 <img
                                     src={womanLaptop}
                                     draggable={false}
                                 />
-                            </div>
+                            </div>}
                         </div>
                         <div className={classNames('ConfigureServer__card', transition, {'with-error': nameError || urlError})}>
                             <div
@@ -300,7 +305,7 @@ function ConfigureServer({
                                     {cardTitle || formatMessage({id: 'renderer.components.configureServer.cardtitle', defaultMessage: 'Enter your server details'})}
                                 </p>
                                 <div className='ConfigureServer__card-form'>
-                                    <Input
+                                    {false && <Input
                                         name='name'
                                         className='ConfigureServer__card-form-input'
                                         type='text'
@@ -317,7 +322,7 @@ function ConfigureServer({
                                         placeholder={formatMessage({id: 'renderer.components.configureServer.name.placeholder', defaultMessage: 'Server display name'})}
                                         disabled={waiting}
                                         darkMode={darkMode}
-                                    />
+                                    />}
                                     <Input
                                         name='url'
                                         className='ConfigureServer__card-form-input'
