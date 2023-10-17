@@ -14,7 +14,7 @@ function print_info {
 }
 
 function tag {
-    # not forcing tags, this might fail on purpose if tags are already created 
+    # not forcing tags, this might fail on purpose if tags are already created
     # as we don't want to overwrite automatically.
     # if this happens, you should check that versions are ok and see if there are
     # any tags locally or upstream that might conflict.
@@ -22,11 +22,11 @@ function tag {
 }
 
 function write_package_version {
-    temp_file="$(mktemp -t package.json)"
+    temp_file="$(mktemp -t package.json.XXXX)"
     jq ".version = \"${1}\"" ./package.json > "${temp_file}" && mv "${temp_file}" ./package.json
-    temp_file="$(mktemp -t package-lock.json)"
+    temp_file="$(mktemp -t package-lock.json.XXXX)"
     jq ".version = \"${1}\"" ./package-lock.json > "${temp_file}" && mv "${temp_file}" ./package-lock.json
-    
+
     git add ./package.json ./package-lock.json
     git commit -qm "Bump to version ${1}"
 }
@@ -39,8 +39,8 @@ trap 'last_command=$current_command; current_command=$BASH_COMMAND' DEBUG
 trap 'echo "\"${last_command}\" command filed with exit code $?."' EXIT
 
 # mattermost repo might not be the origin one, we don't want to enforce that.
-org="github.com:mattermost"
-git_origin="$(git remote -v | grep ${org} | grep push | awk '{print $1}')"
+org="github.com:mattermost|https://github.com/mattermost"
+git_origin="$(git remote -v | grep -E ${org} | grep push | awk '{print $1}')"
 if [[ -z "${git_origin}" ]]; then
     print_warning "Can't find a mattermost remote, defaulting to origin"
     git_origin="origin"
@@ -84,7 +84,7 @@ case "${1}" in
                 rc=0
             fi
             case "${rc}" in
-                ''|*[!0-9]*) 
+                ''|*[!0-9]*)
                     print_warning "Can't guess release candidate from version, assuming 1"
                     rc=0
                 ;;
@@ -102,6 +102,35 @@ case "${1}" in
             print_error "Can't generate a release candidate on a non release-X.Y branch"
             exit 2
 
+        fi
+    ;;
+    "pre-final")
+        if [[ "${branch_name}" =~ "release-" ]]; then
+            print_info "Releasing v${current_version} for MAS approval"
+            new_pkg_version="${current_version}"
+            if [[ "${pkg_version}" != "${new_pkg_version}" ]]; then
+                write_package_version "${new_pkg_version}"
+            fi
+            new_tag_version=$(git describe --match "v$current_version*" --abbrev=0)
+            if [[ "${new_tag_version}" =~ "-mas." ]]; then
+                mas="${new_tag_version#*-mas.}"
+            else
+                mas=0
+            fi
+            case "${mas}" in
+                ''|*[!0-9]*)
+                    mas=0
+                ;;
+                *)
+                    mas=$(( mas + 1 ))
+                ;;
+            esac
+            tag "${new_pkg_version}-mas.${mas}" "MAS approval ${mas}"
+            print_info "Locally created an MAS approval version. In order to build you'll have to:"
+            print_info "$ git push --follow-tags ${git_origin} ${branch_name}:${branch_name}"
+        else
+            print_error "Can't release on a non release-X.Y branch"
+            exit 2
         fi
     ;;
     "final")
@@ -124,7 +153,7 @@ case "${1}" in
     ;;
     "patch")
         if [[ "${branch_name}" =~ "release-" ]]; then
-            new_pkg_version="${major}.${minor}.$(( micro + 1 ))-rc1"
+            new_pkg_version="${major}.${minor}.$(( micro + 1 ))-rc.1"
             print_info "Releasing v${new_pkg_version}"
             write_package_version "${new_pkg_version}"
             tag "${new_pkg_version}" "Released on $(date -u)"
@@ -147,7 +176,7 @@ case "${1}" in
                 exit 3
             fi
 
-            new_pkg_version="${new_branch_version}.0-rc1"
+            new_pkg_version="${new_branch_version}.0-rc.1"
             git checkout -b "${new_branch_name}"
             write_package_version "${new_pkg_version}"
             tag "${new_pkg_version}" "Quality branch"
@@ -164,7 +193,7 @@ case "${1}" in
             fi
             new_branch_version="${major}.${minor}"
             new_branch_name="release-${new_branch_version}"
-            new_pkg_version="${new_branch_version}.0-rc1"
+            new_pkg_version="${new_branch_version}.0-rc.1"
             master_pkg_version="${major}.$(( minor + 1 )).0-develop"
             print_info "Creating a new features branch: ${new_branch_name}"
 

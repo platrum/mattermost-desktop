@@ -2,7 +2,11 @@
 // See LICENSE.txt for license information.
 
 import {net, session} from 'electron';
-import log from 'electron-log';
+
+import {COOKIE_NAME_AUTH_TOKEN, COOKIE_NAME_CSRF, COOKIE_NAME_USER_ID} from 'common/constants';
+import {Logger} from 'common/log';
+
+const log = new Logger('serverAPI');
 
 export async function getServerAPI<T>(url: URL, isAuthenticated: boolean, onSuccess?: (data: T) => void, onAbort?: () => void, onError?: (error: Error) => void) {
     if (isAuthenticated) {
@@ -15,9 +19,9 @@ export async function getServerAPI<T>(url: URL, isAuthenticated: boolean, onSucc
         // Filter out cookies that aren't part of our domain
         const filteredCookies = cookies.filter((cookie) => cookie.domain && url.toString().indexOf(cookie.domain) >= 0);
 
-        const userId = filteredCookies.find((cookie) => cookie.name === 'MMUSERID');
-        const csrf = filteredCookies.find((cookie) => cookie.name === 'MMCSRF');
-        const authToken = filteredCookies.find((cookie) => cookie.name === 'MMAUTHTOKEN');
+        const userId = filteredCookies.find((cookie) => cookie.name === COOKIE_NAME_USER_ID);
+        const csrf = filteredCookies.find((cookie) => cookie.name === COOKIE_NAME_CSRF);
+        const authToken = filteredCookies.find((cookie) => cookie.name === COOKIE_NAME_AUTH_TOKEN);
 
         if (!userId || !csrf || !authToken) {
             // Missing cookies needed for req
@@ -34,11 +38,14 @@ export async function getServerAPI<T>(url: URL, isAuthenticated: boolean, onSucc
 
     if (onSuccess) {
         req.on('response', (response: Electron.IncomingMessage) => {
-            log.silly('getServerAPI.response', response);
+            log.silly('response', response);
             if (response.statusCode === 200) {
+                let raw = '';
                 response.on('data', (chunk: Buffer) => {
-                    log.silly('getServerAPI.response.data', `${chunk}`);
-                    const raw = `${chunk}`;
+                    log.silly('response.data', `${chunk}`);
+                    raw += `${chunk}`;
+                });
+                response.on('end', () => {
                     try {
                         const data = JSON.parse(raw) as T;
                         onSuccess(data);

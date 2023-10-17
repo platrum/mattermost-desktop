@@ -8,18 +8,17 @@ import {FormattedMessage} from 'react-intl';
 
 import {Button} from 'react-bootstrap';
 
-import {START_UPDATE_DOWNLOAD} from 'common/communication';
-
 import Thumbnail from '../Thumbnail';
 
 type OwnProps = {
     item: DownloadedItem;
+    appName: string;
 }
 
-const UpdateAvailable = ({item}: OwnProps) => {
+const UpdateAvailable = ({item, appName}: OwnProps) => {
     const onButtonClick = (e: React.MouseEvent<HTMLButtonElement>) => {
         e?.preventDefault?.();
-        window.postMessage({type: START_UPDATE_DOWNLOAD}, window.location.href);
+        window.desktop.downloadsDropdown.startUpdateDownload();
     };
 
     return (
@@ -35,8 +34,11 @@ const UpdateAvailable = ({item}: OwnProps) => {
                 <div className='DownloadsDropdown__Update__Details__Description'>
                     <FormattedMessage
                         id='renderer.downloadsDropdown.Update.ANewVersionIsAvailableToInstall'
-                        defaultMessage={`A new version of the Mattermost Desktop App (version ${item.filename}) is available to install.`}
-                        values={{version: item.filename}}
+                        defaultMessage={`A new version of the {appName} Desktop App (version ${item.filename}) is available to install.`}
+                        values={{
+                            version: item.filename,
+                            appName,
+                        }}
                     />
                 </div>
                 <Button

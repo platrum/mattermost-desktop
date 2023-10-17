@@ -4,16 +4,22 @@
 'use strict';
 
 import {app, ipcMain, Menu, MenuItemConstructorOptions, MenuItem, session, shell, WebContents, clipboard} from 'electron';
+import log from 'electron-log';
 
-import {BROWSER_HISTORY_BUTTON, OPEN_TEAMS_DROPDOWN, SHOW_NEW_SERVER_MODAL} from 'common/communication';
+import ServerViewState from 'app/serverViewState';
+
+import {OPEN_SERVERS_DROPDOWN, SHOW_NEW_SERVER_MODAL} from 'common/communication';
 import {t} from 'common/utils/util';
-import {getTabDisplayName, TabType} from 'common/tabs/TabView';
+import {getViewDisplayName, ViewType} from 'common/views/View';
 import {Config} from 'common/config';
 
 import {localizeMessage} from 'main/i18nManager';
-import WindowManager from 'main/windows/windowManager';
+import ServerManager from 'common/servers/serverManager';
 import {UpdateManager} from 'main/autoUpdater';
 import downloadsManager from 'main/downloadsManager';
+import Diagnostics from 'main/diagnostics';
+import ViewManager from 'main/views/viewManager';
+import SettingsWindow from 'main/windows/settingsWindow';
 
 export function createTemplate(config: Config, updateManager: UpdateManager) {
     const separatorItem: MenuItemConstructorOptions = {
@@ -41,11 +47,11 @@ export function createTemplate(config: Config, updateManager: UpdateManager) {
         label: settingsLabel,
         accelerator: 'CmdOrCtrl+,',
         click() {
-            WindowManager.showSettingsWindow();
+            SettingsWindow.show();
         },
     });
 
-    if (config.data?.enableServerManagement === true) {
+    if (config.enableServerManagement === true && ServerManager.hasServers()) {
         platformAppMenu.push({
             label: localizeMessage('main.menus.app.file.signInToAnotherServer', 'Sign in to Another Server'),
             click() {
@@ -123,20 +129,20 @@ export function createTemplate(config: Config, updateManager: UpdateManager) {
         label: localizeMessage('main.menus.app.view.find', 'Find..'),
         accelerator: 'CmdOrCtrl+F',
         click() {
-            WindowManager.sendToFind();
+            ViewManager.sendToFind();
         },
     }, {
         label: localizeMessage('main.menus.app.view.reload', 'Reload'),
         accelerator: 'CmdOrCtrl+R',
         click() {
-            WindowManager.reload();
+            ViewManager.reload();
         },
     }, {
         label: localizeMessage('main.menus.app.view.clearCacheAndReload', 'Clear Cache and Reload'),
         accelerator: 'Shift+CmdOrCtrl+R',
         click() {
             session.defaultSession.clearCache();
-            WindowManager.reload();
+            ViewManager.reload();
         },
     }, {
         role: 'togglefullscreen',
@@ -190,7 +196,7 @@ export function createTemplate(config: Config, updateManager: UpdateManager) {
     }, {
         label: localizeMessage('main.menus.app.view.devToolsCurrentServer', 'Developer Tools for Current Server'),
         click() {
-            WindowManager.openBrowserViewDevTools();
+            ViewManager.getCurrentView()?.openDevTools();
         },
     }];
 
@@ -199,7 +205,7 @@ export function createTemplate(config: Config, updateManager: UpdateManager) {
         viewSubMenu.push({
             label: localizeMessage('main.menus.app.view.toggleDarkMode', 'Toggle Dark Mode'),
             click() {
-                config.toggleDarkModeManually();
+                config.set('darkMode', !config.darkMode);
             },
         });
     }
@@ -216,26 +222,18 @@ export function createTemplate(config: Config, updateManager: UpdateManager) {
             label: localizeMessage('main.menus.app.history.back', 'Back'),
             accelerator: process.platform === 'darwin' ? 'Cmd+[' : 'Alt+Left',
             click: () => {
-                const view = WindowManager.viewManager?.getCurrentView();
-                if (view && view.view.webContents.canGoBack() && !view.isAtRoot) {
-                    view.view.webContents.goBack();
-                    ipcMain.emit(BROWSER_HISTORY_BUTTON, null, view.name);
-                }
+                ViewManager.getCurrentView()?.goToOffset(-1);
             },
         }, {
             label: localizeMessage('main.menus.app.history.forward', 'Forward'),
             accelerator: process.platform === 'darwin' ? 'Cmd+]' : 'Alt+Right',
             click: () => {
-                const view = WindowManager.viewManager?.getCurrentView();
-                if (view && view.view.webContents.canGoForward()) {
-                    view.view.webContents.goForward();
-                    ipcMain.emit(BROWSER_HISTORY_BUTTON, null, view.name);
-                }
+                ViewManager.getCurrentView()?.goToOffset(1);
             },
         }],
     });
 
-    const teams = config.data?.teams || [];
+    const servers = ServerManager.getOrderedServers();
     const windowMenu = {
         id: 'window',
         label: localizeMessage('main.menus.app.window', '&Window'),
@@ -254,28 +252,30 @@ export function createTemplate(config: Config, updateManager: UpdateManager) {
             role: 'close',
             label: isMac ? localizeMessage('main.menus.app.window.closeWindow', 'Close Window') : localizeMessage('main.menus.app.window.close', 'Close'),
             accelerator: 'CmdOrCtrl+W',
-        }, separatorItem, {
+        }, separatorItem,
+        ...(ServerManager.hasServers() ? [{
             label: localizeMessage('main.menus.app.window.showServers', 'Show Servers'),
             accelerator: `${process.platform === 'darwin' ? 'Cmd+Ctrl' : 'Ctrl+Shift'}+S`,
             click() {
-                ipcMain.emit(OPEN_TEAMS_DROPDOWN);
+                ipcMain.emit(OPEN_SERVERS_DROPDOWN);
             },
-        }, ...teams.sort((teamA, teamB) => teamA.order - teamB.order).slice(0, 9).map((team, i) => {
+        }] : []),
+        ...servers.slice(0, 9).map((server, i) => {
             const items = [];
             items.push({
-                label: team.name,
+                label: server.name,
                 accelerator: `${process.platform === 'darwin' ? 'Cmd+Ctrl' : 'Ctrl+Shift'}+${i + 1}`,
                 click() {
-                    WindowManager.switchServer(team.name);
+                    ServerViewState.switchServer(server.id);
                 },
             });
-            if (WindowManager.getCurrentTeamName() === team.name) {
-                team.tabs.filter((tab) => tab.isOpen).sort((teamA, teamB) => teamA.order - teamB.order).slice(0, 9).forEach((tab, i) => {
+            if (ServerViewState.getCurrentServer().id === server.id) {
+                ServerManager.getOrderedTabsForServer(server.id).slice(0, 9).forEach((view, i) => {
                     items.push({
-                        label: `    ${localizeMessage(`common.tabs.${tab.name}`, getTabDisplayName(tab.name as TabType))}`,
+                        label: `    ${localizeMessage(`common.views.${view.type}`, getViewDisplayName(view.type as ViewType))}`,
                         accelerator: `CmdOrCtrl+${i + 1}`,
                         click() {
-                            WindowManager.switchTab(team.name, tab.name);
+                            ViewManager.showById(view.id);
                         },
                     });
                 });
@@ -285,16 +285,16 @@ export function createTemplate(config: Config, updateManager: UpdateManager) {
             label: localizeMessage('main.menus.app.window.selectNextTab', 'Select Next Tab'),
             accelerator: 'Ctrl+Tab',
             click() {
-                WindowManager.selectNextTab();
+                ServerViewState.selectNextView();
             },
-            enabled: (teams.length > 1),
+            enabled: (servers.length > 1),
         }, {
             label: localizeMessage('main.menus.app.window.selectPreviousTab', 'Select Previous Tab'),
             accelerator: 'Ctrl+Shift+Tab',
             click() {
-                WindowManager.selectPreviousTab();
+                ServerViewState.selectPreviousView();
             },
-            enabled: (teams.length > 1),
+            enabled: (servers.length > 1),
         }, ...(isMac ? [separatorItem, {
             role: 'front',
             label: localizeMessage('main.menus.app.window.bringAllToFront', 'Bring All to Front'),
@@ -327,15 +327,32 @@ export function createTemplate(config: Config, updateManager: UpdateManager) {
             });
         }
     }
-    if (config.data?.helpLink) {
+    if (config.helpLink) {
         submenu.push({
             label: localizeMessage('main.menus.app.help.learnMore', 'Learn More...'),
             click() {
-                shell.openExternal(config.data!.helpLink);
+                shell.openExternal(config.helpLink!);
             },
         });
         submenu.push(separatorItem);
     }
+
+    submenu.push({
+        id: 'Show logs',
+        label: localizeMessage('main.menus.app.help.ShowLogs', 'Show logs'),
+        click() {
+            shell.showItemInFolder(log.transports.file.getFile().path);
+        },
+    });
+
+    submenu.push({
+        id: 'diagnostics',
+        label: localizeMessage('main.menus.app.help.RunDiagnostics', 'Run diagnostics'),
+        click() {
+            Diagnostics.run();
+        },
+    });
+    submenu.push(separatorItem);
 
     const version = localizeMessage('main.menus.app.help.versionString', 'Version {version}{commit}', {
         version: app.getVersion(),
