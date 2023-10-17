@@ -17,7 +17,12 @@
   "files": [
     "node_modules/bootstrap/dist/**",
     "node_modules/font-awesome/{css,fonts}/**",
-    "!**/node_modules/macos-notification-state/build/Release/.forge-meta",
+    "!**/node_modules/macos-notification-state/bin/**/*",
+    "!**/node_modules/macos-notification-state/build/**/*",
+    "!**/node_modules/windows-focus-assist/bin/**/*",
+    "!**/node_modules/windows-focus-assist/build/**/*",
+    "node_modules/macos-notification-state/build/**/*.node",
+    "node_modules/windows-focus-assist/build/Release/**/*.node",
     {
       "from": "dist",
       "to": ".",
@@ -32,7 +37,6 @@
       ]
     }
   ],
-  "beforePack": "scripts/beforepack.js",
   "afterPack": "scripts/afterpack.js",
   "afterSign": "scripts/notarize.js",
   "afterAllArtifactBuild": "scripts/afterbuild.js",
@@ -40,8 +44,6 @@
     "artifactName": "${version}/${name}_${version}-1_${arch}.${ext}",
     "synopsis": "Platrum Chat App",
     "depends": [
-      "gconf2",
-      "gconf-service",
       "libnotify4",
       "libxtst6",
       "libnss3"
@@ -50,8 +52,8 @@
     "priority": "optional"
   },
   "asarUnpack": [
-    "./node_modules/macos-notification-state/**/*",
-    "./node_modules/windows-focus-assist/**/*"
+    "./node_modules/macos-notification-state/build/Release/**/*.node",
+    "./node_modules/windows-focus-assist/build/Release/**/*.node"
   ],
   "linux": {
     "category": "Network;InstantMessaging",
@@ -61,7 +63,6 @@
       "appimage",
       "rpm"
     ],
-    "icon": "src/assets/icon.icns",
     "extraFiles": [
       {
         "filter": [
@@ -79,6 +80,9 @@
       }
     ]
   },
+  "appImage": {
+    "executableArgs": [" "]
+  },
   "mac": {
     "category": "public.app-category.productivity",
     "target": [
@@ -94,7 +98,6 @@
         ]
       }
     ],
-    "icon": "src/assets/osx/osx_icon.icns",
     "hardenedRuntime": true,
     "gatekeeperAssess": true,
     "entitlements": "./entitlements.mac.plist",
@@ -159,6 +162,10 @@
     "publisherName": "CN=\"Platrum\", O=\"Platrum\""
   },
   "nsis": {
-    "artifactName": "${version}/${name}-setup-${version}-win.${ext}"
+    "artifactName": "${version}/${name}-setup-${version}-win.${ext}",
+    "packElevateHelper": false
+  },
+  "rpm": {
+    "fpm": ["--rpm-rpmbuild-define", "_build_id_links none"]
   }
 }

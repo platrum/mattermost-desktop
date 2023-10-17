@@ -38,6 +38,7 @@ describe('Menu/window_menu', function desc() {
                 lastActiveTab: 0,
             },
         ],
+        lastActiveTeam: 2,
         minimizeToTray: true,
         alwaysMinimize: true,
     };
@@ -71,28 +72,28 @@ describe('Menu/window_menu', function desc() {
         after(afterFunc);
 
         it('MM-T826_1 should show the second server', async () => {
-            let dropdownButtonText = await mainWindow.innerText('.TeamDropdownButton');
-            dropdownButtonText.should.equal('example');
+            let dropdownButtonText = await mainWindow.innerText('.ServerDropdownButton');
+            dropdownButtonText.should.equal('google');
 
             robot.keyTap('2', ['control', process.platform === 'darwin' ? 'command' : 'shift']);
-            dropdownButtonText = await mainWindow.innerText('.TeamDropdownButton:has-text("github")');
+            dropdownButtonText = await mainWindow.innerText('.ServerDropdownButton:has-text("github")');
             dropdownButtonText.should.equal('github');
         });
 
         it('MM-T826_2 should show the third server', async () => {
             robot.keyTap('3', ['control', process.platform === 'darwin' ? 'command' : 'shift']);
-            const dropdownButtonText = await mainWindow.innerText('.TeamDropdownButton:has-text("google")');
+            const dropdownButtonText = await mainWindow.innerText('.ServerDropdownButton:has-text("google")');
             dropdownButtonText.should.equal('google');
         });
 
         it('MM-T826_3 should show the first server', async () => {
             robot.keyTap('1', ['control', process.platform === 'darwin' ? 'command' : 'shift']);
-            const dropdownButtonText = await mainWindow.innerText('.TeamDropdownButton:has-text("example")');
+            const dropdownButtonText = await mainWindow.innerText('.ServerDropdownButton:has-text("example")');
             dropdownButtonText.should.equal('example');
         });
     });
 
-    it('MM-T4385 select tab from menu', async () => {
+    describe('MM-T4385 select tab from menu', async () => {
         let mainView;
 
         before(async () => {
@@ -106,18 +107,21 @@ describe('Menu/window_menu', function desc() {
             tabViewButton.should.equal('Channels');
 
             robot.keyTap('2', [env.cmdOrCtrl]);
+            await asyncSleep(500);
             tabViewButton = await mainView.innerText('.active');
             tabViewButton.should.equal('Boards');
         });
 
         it('MM-T4385_2 should show the third tab', async () => {
             robot.keyTap('3', [env.cmdOrCtrl]);
+            await asyncSleep(500);
             const tabViewButton = await mainView.innerText('.active');
             tabViewButton.should.equal('Playbooks');
         });
 
         it('MM-T4385_3 should show the first tab', async () => {
             robot.keyTap('1', [env.cmdOrCtrl]);
+            await asyncSleep(500);
             const tabViewButton = await mainView.innerText('.active');
             tabViewButton.should.equal('Channels');
         });
@@ -132,10 +136,12 @@ describe('Menu/window_menu', function desc() {
         tabViewButton.should.equal('Channels');
 
         robot.keyTap('tab', ['control']);
+        await asyncSleep(500);
         tabViewButton = await mainView.innerText('.active');
         tabViewButton.should.equal('Boards');
 
         robot.keyTap('tab', ['shift', 'control']);
+        await asyncSleep(500);
         tabViewButton = await mainView.innerText('.active');
         tabViewButton.should.equal('Channels');
 
