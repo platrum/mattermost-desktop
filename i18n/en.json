@@ -139,7 +139,7 @@
   "renderer.components.configureServer.title": "Logging in to Platrum Chat",
   "renderer.components.configureServer.url.info": "The URL of your Platrum server",
   "renderer.components.configureServer.url.insecure": "Your server URL is potentially insecure. For best results, use a URL with the HTTPS protocol.",
-  "renderer.components.configureServer.url.notPlatrum": "The server URL provided does not appear to point to a valid Platrum server. Please verify the URL and check your connection.",
+  "renderer.components.configureServer.url.notMattermost": "The server URL provided does not appear to point to a valid Platrum server. Please verify the URL and check your connection.",
   "renderer.components.configureServer.url.ok": "Server URL is valid. Server version: {serverVersion}",
   "renderer.components.configureServer.url.placeholder": "Server URL",
   "renderer.components.configureServer.url.urlNotMatched": "The server URL provided does not match the configured Site URL on your Platrum server. Server version: {serverVersion}",

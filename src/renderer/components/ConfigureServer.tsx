@@ -294,10 +294,6 @@ function ConfigureServer({
             )}
         >
             <LoadingBackground/>
-            {false && <Header
-                darkMode={darkMode}
-                alternateLink={mobileView ? getAlternateLink() : undefined}
-            />}
             {showContent && (
                 <div className='ConfigureServer__body'>
                     {!mobileView && getAlternateLink()}
@@ -306,23 +302,6 @@ function ConfigureServer({
                             <h1 className='ConfigureServer__message-title'>
                                 {messageTitle || formatMessage({id: 'renderer.components.configureServer.title', defaultMessage: 'Let’s connect to a server'})}
                             </h1>
-                            <p className='ConfigureServer__message-subtitle'>
-                                {false && (messageSubtitle || (
-                                    <FormattedMessage
-                                        id='renderer.components.configureServer.subtitle'
-                                        defaultMessage='Set up your first server to connect to your<br></br>team’s communication hub'
-                                        values={{
-                                            br: (x: React.ReactNode) => (<><br/>{x}</>),
-                                        }}
-                                    />))
-                                }
-                            </p>
-                            {false && <div className='ConfigureServer__message-img'>
-                                <img
-                                    src={womanLaptop}
-                                    draggable={false}
-                                />
-                            </div>}
                         </div>
                         <div className={classNames('ConfigureServer__card', transition, {'with-error': nameError || urlError?.type === STATUS.ERROR})}>
                             <div
@@ -334,21 +313,6 @@ function ConfigureServer({
                                     {cardTitle || formatMessage({id: 'renderer.components.configureServer.cardtitle', defaultMessage: 'Enter your server details'})}
                                 </p>
                                 <div className='ConfigureServer__card-form'>
-                                    {false && <Input
-                                        name='url'
-                                        className='ConfigureServer__card-form-input'
-                                        type='text'
-                                        inputSize={SIZE.LARGE}
-                                        value={url}
-                                        onChange={handleURLOnChange}
-                                        customMessage={urlError ?? ({
-                                            type: STATUS.INFO,
-                                            value: formatMessage({id: 'renderer.components.configureServer.url.info', defaultMessage: 'The URL of your Mattermost server'}),
-                                        })}
-                                        placeholder={formatMessage({id: 'renderer.components.configureServer.url.placeholder', defaultMessage: 'Server URL'})}
-                                        disabled={waiting}
-                                        darkMode={darkMode}
-                                    />}
                                     <Input
                                         name='name'
                                         className='ConfigureServer__card-form-input'
