@@ -1,13 +1,11 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {useState} from 'react';
-import {DownloadedItem} from 'types/downloads';
 import classNames from 'classnames';
-
+import React, {useState} from 'react';
 import {useIntl} from 'react-intl';
 
-import {DOWNLOADS_DROPDOWN_SHOW_FILE_IN_FOLDER} from 'common/communication';
+import type {DownloadedItem} from 'types/downloads';
 
 import FileSizeAndStatus from './FileSizeAndStatus';
 import ProgressBar from './ProgressBar';
@@ -17,20 +15,21 @@ import Thumbnail from './Thumbnail';
 type OwnProps = {
     activeItem?: DownloadedItem;
     item: DownloadedItem;
+    appName: string;
 }
 
-const DownloadsDropdownItemFile = ({item, activeItem}: OwnProps) => {
+const DownloadsDropdownItemFile = ({item, activeItem, appName}: OwnProps) => {
     const [threeDotButtonVisible, setThreeDotButtonVisible] = useState(false);
     const translate = useIntl();
 
     const onFileClick = (e: React.MouseEvent<HTMLDivElement>) => {
         e.preventDefault();
 
-        window.postMessage({type: DOWNLOADS_DROPDOWN_SHOW_FILE_IN_FOLDER, payload: {item}}, window.location.href);
+        window.desktop.downloadsDropdown.openFile(item);
     };
 
     const itemFilename = item.type === 'update' ?
-        translate.formatMessage({id: 'renderer.downloadsDropdown.Update.MattermostVersionX', defaultMessage: `Mattermost version ${item.filename}`}, {version: item.filename}) :
+        translate.formatMessage({id: 'renderer.downloadsDropdown.Update.MattermostVersionX', defaultMessage: `{appName} version ${item.filename}`}, {version: item.filename, appName}) :
         item.filename;
 
     return (

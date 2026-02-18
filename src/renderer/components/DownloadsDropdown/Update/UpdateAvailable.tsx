@@ -1,25 +1,30 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React from 'react';
-import {DownloadedItem} from 'types/downloads';
-
+import React, {useState} from 'react';
+import {Button} from 'react-bootstrap';
 import {FormattedMessage} from 'react-intl';
 
-import {Button} from 'react-bootstrap';
+import LoadingWrapper from 'renderer/components/SaveButton/LoadingWrapper';
 
-import {START_UPDATE_DOWNLOAD} from 'common/communication';
+import type {DownloadedItem} from 'types/downloads';
 
 import Thumbnail from '../Thumbnail';
 
 type OwnProps = {
     item: DownloadedItem;
+    appName: string;
 }
 
-const UpdateAvailable = ({item}: OwnProps) => {
+const UpdateAvailable = ({item, appName}: OwnProps) => {
+    const [isProcessing, setIsProcessing] = useState(false);
     const onButtonClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+        if (isProcessing) {
+            return;
+        }
+        setIsProcessing(true);
         e?.preventDefault?.();
-        window.postMessage({type: START_UPDATE_DOWNLOAD}, window.location.href);
+        window.desktop.downloadsDropdown.startUpdateDownload();
     };
 
     return (
@@ -29,25 +34,40 @@ const UpdateAvailable = ({item}: OwnProps) => {
                 <div className='DownloadsDropdown__Update__Details__Title'>
                     <FormattedMessage
                         id='renderer.downloadsDropdown.Update.NewDesktopVersionAvailable'
-                        defaultMessage='New Desktop version available'
+                        defaultMessage='New desktop version available'
                     />
                 </div>
                 <div className='DownloadsDropdown__Update__Details__Description'>
                     <FormattedMessage
                         id='renderer.downloadsDropdown.Update.ANewVersionIsAvailableToInstall'
-                        defaultMessage={`A new version of the Mattermost Desktop App (version ${item.filename}) is available to install.`}
-                        values={{version: item.filename}}
+                        defaultMessage={`A new version of the {appName} desktop app (version ${item.filename}) is available to install.`}
+                        values={{
+                            version: item.filename,
+                            appName,
+                        }}
                     />
                 </div>
                 <Button
                     id='downloadUpdateButton'
-                    className='primary-button'
+                    className='primary-button DownloadsDropdown__Update__Details__Button'
+                    variant='primary'
                     onClick={onButtonClick}
+                    disabled={isProcessing}
                 >
-                    <FormattedMessage
-                        id='renderer.downloadsDropdown.Update.DownloadUpdate'
-                        defaultMessage='Download Update'
-                    />
+                    <LoadingWrapper
+                        loading={isProcessing}
+                        text={(
+                            <FormattedMessage
+                                id='renderer.downloadsDropdown.Update.Downloading'
+                                defaultMessage='Downloading'
+                            />
+                        )}
+                    >
+                        <FormattedMessage
+                            id='renderer.downloadsDropdown.Update.DownloadUpdate'
+                            defaultMessage='Download update'
+                        />
+                    </LoadingWrapper>
                 </Button>
             </div>
         </div>

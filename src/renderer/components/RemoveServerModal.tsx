@@ -22,7 +22,7 @@ function RemoveServerModal(props: Props) {
     return (
         <DestructiveConfirmationModal
             {...rest}
-            title={intl.formatMessage({id: 'renderer.components.removeServerModal.title', defaultMessage: 'Remove Server'})}
+            title={intl.formatMessage({id: 'renderer.components.removeServerModal.title', defaultMessage: 'Remove project'})}
             acceptLabel={intl.formatMessage({id: 'label.remove', defaultMessage: 'Remove'})}
             cancelLabel={intl.formatMessage({id: 'label.cancel', defaultMessage: 'Cancel'})}
             body={(
@@ -30,13 +30,13 @@ function RemoveServerModal(props: Props) {
                     <p>
                         <FormattedMessage
                             id='renderer.components.removeServerModal.body'
-                            defaultMessage='This will remove the server from your Desktop App but will not delete any of its data - you can add the server back to the app at any time.'
+                            defaultMessage='This will remove the project from your desktop app but will not delete any of its data - you can add the project back to the app at any time.'
                         />
                     </p>
                     <p>
                         <FormattedMessage
                             id='renderer.components.removeServerModal.confirm'
-                            defaultMessage='Confirm you wish to remove the {serverName} server?'
+                            defaultMessage='Confirm you wish to remove the {serverName} project?'
                             values={{serverName}}
                         />
                     </p>

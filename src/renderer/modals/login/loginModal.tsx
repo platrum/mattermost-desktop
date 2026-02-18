@@ -2,21 +2,20 @@
 // See LICENSE.txt for license information.
 // Copyright (c) 2015-2016 Yuya Ochiai
 
+import type {AuthenticationResponseDetails, AuthInfo} from 'electron/renderer';
 import React from 'react';
 import {Button, Col, FormLabel, Form, FormGroup, FormControl, Modal} from 'react-bootstrap';
-import {FormattedMessage, injectIntl, IntlShape} from 'react-intl';
+import type {IntlShape} from 'react-intl';
+import {FormattedMessage, injectIntl} from 'react-intl';
 
-import {LoginModalData} from 'types/auth';
-import {ModalMessage} from 'types/modals';
-import {AuthenticationResponseDetails, AuthInfo} from 'electron/renderer';
+import {parseURL} from 'common/utils/url';
 
-import urlUtils from 'common/utils/url';
-import {MODAL_INFO} from 'common/communication';
+import type {LoginModalInfo} from 'types/modals';
 
 type Props = {
     onCancel: (request: AuthenticationResponseDetails) => void;
     onLogin: (request: AuthenticationResponseDetails, username: string, password: string) => void;
-    getAuthInfo: () => void;
+    getAuthInfo: () => Promise<LoginModalInfo>;
     intl: IntlShape;
 };
 
@@ -36,27 +35,14 @@ class LoginModal extends React.PureComponent<Props, State> {
         };
     }
 
-    componentDidMount() {
-        window.addEventListener('message', this.handleAuthInfoMessage);
-
-        this.props.getAuthInfo();
+    async componentDidMount() {
+        await this.getAuthInfo();
     }
 
-    componentWillUnmount() {
-        window.removeEventListener('message', this.handleAuthInfoMessage);
-    }
-
-    handleAuthInfoMessage = (event: {data: ModalMessage<LoginModalData>}) => {
-        switch (event.data.type) {
-        case MODAL_INFO: {
-            const {request, authInfo} = event.data.data;
-            this.setState({request, authInfo});
-            break;
-        }
-        default:
-            break;
-        }
-    }
+    getAuthInfo = async () => {
+        const {request, authInfo} = await this.props.getAuthInfo();
+        this.setState({request, authInfo});
+    };
 
     handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -67,7 +53,7 @@ class LoginModal extends React.PureComponent<Props, State> {
             request: undefined,
             authInfo: undefined,
         });
-    }
+    };
 
     handleCancel = (event: React.MouseEvent<HTMLButtonElement>) => {
         event.preventDefault();
@@ -78,15 +64,15 @@ class LoginModal extends React.PureComponent<Props, State> {
             request: undefined,
             authInfo: undefined,
         });
-    }
+    };
 
     setUsername = (e: React.ChangeEvent<HTMLInputElement>) => {
         this.setState({username: e.target.value});
-    }
+    };
 
     setPassword = (e: React.ChangeEvent<HTMLInputElement>) => {
         this.setState({password: e.target.value});
-    }
+    };
 
     renderLoginModalMessage = () => {
         if (!(this.state.request && this.state.authInfo)) {
@@ -100,15 +86,15 @@ class LoginModal extends React.PureComponent<Props, State> {
                 />
             );
         }
-        const tmpURL = urlUtils.parseURL(this.state.request.url);
+        const tmpURL = parseURL(this.state.request.url);
         return (
             <FormattedMessage
                 id='renderer.modals.login.loginModal.message.server'
-                defaultMessage='The server {url} requires a username and password.'
+                defaultMessage='The project host {url} requires a username and password.'
                 values={{url: `${tmpURL?.protocol}//${tmpURL?.host}`}}
             />
         );
-    }
+    };
 
     render() {
         const {intl} = this.props;
@@ -121,7 +107,7 @@ class LoginModal extends React.PureComponent<Props, State> {
                     <Modal.Title>
                         <FormattedMessage
                             id='renderer.modals.login.loginModal.title'
-                            defaultMessage='Authentication Required'
+                            defaultMessage='Authentication required'
                         />
                     </Modal.Title>
                 </Modal.Header>
@@ -139,13 +125,13 @@ class LoginModal extends React.PureComponent<Props, State> {
                             >
                                 <FormattedMessage
                                     id='renderer.modals.login.loginModal.username'
-                                    defaultMessage='User Name'
+                                    defaultMessage='User name'
                                 />
                             </Col>
                             <Col sm={10}>
                                 <FormControl
                                     type='text'
-                                    placeholder={intl.formatMessage({id: 'renderer.modals.login.loginModal.username', defaultMessage: 'User Name'})}
+                                    placeholder={intl.formatMessage({id: 'renderer.modals.login.loginModal.username', defaultMessage: 'User name'})}
                                     onChange={this.setUsername}
                                     value={this.state.username}
                                     onClick={(e: React.MouseEvent<HTMLInputElement>) => {

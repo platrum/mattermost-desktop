@@ -1,30 +1,51 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {useState, useCallback, useEffect} from 'react';
-import {useIntl, FormattedMessage} from 'react-intl';
 import classNames from 'classnames';
+import React, {useState, useCallback, useEffect, useRef} from 'react';
+import {useIntl, FormattedMessage} from 'react-intl';
 
-import {TeamWithIndex} from 'types/config';
-
-import womanLaptop from 'renderer/assets/svg/womanLaptop.svg';
-
+import {MODAL_TRANSITION_TIMEOUT, URLValidationStatus} from 'common/utils/constants';
 import Header from 'renderer/components/Header';
 import Input, {STATUS, SIZE} from 'renderer/components/Input';
 import LoadingBackground from 'renderer/components/LoadingScreen/LoadingBackground';
 import SaveButton from 'renderer/components/SaveButton/SaveButton';
 
-import {PING_DOMAIN, PING_DOMAIN_RESPONSE} from 'common/communication';
-import {MODAL_TRANSITION_TIMEOUT} from 'common/utils/constants';
-import urlUtils from 'common/utils/url';
+import type {UniqueServer} from 'types/config';
 
 import 'renderer/css/components/Button.scss';
 import 'renderer/css/components/ConfigureServer.scss';
 import 'renderer/css/components/LoadingScreen.css';
 
+import ServerImage from './Images/server';
+
+const PLATRUM_CHAT_SUFFIX = '.chat.platrum.ru';
+const PROJECT_HOST_REGEX = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+const VALIDATION_DEBOUNCE_MS = 350;
+const VALIDATION_TIMEOUT_MS = 5000;
+
+const getProjectHostFromURL = (url: string): string => {
+    let host = url.trim();
+    host = host.replace(/^https?:\/\//, '');
+    host = host.split('/')[0];
+
+    if (host.endsWith(PLATRUM_CHAT_SUFFIX)) {
+        host = host.slice(0, -PLATRUM_CHAT_SUFFIX.length);
+    }
+
+    return host;
+};
+
+const getProjectURLFromHost = (host: string): string => {
+    if (!host) {
+        return '';
+    }
+    return `https://${host}${PLATRUM_CHAT_SUFFIX}`;
+};
+
 type ConfigureServerProps = {
-    currentTeams: TeamWithIndex[];
-    team?: TeamWithIndex;
+    server?: UniqueServer;
+    prefillURL?: string;
     mobileView?: boolean;
     darkMode?: boolean;
     messageTitle?: string;
@@ -33,12 +54,12 @@ type ConfigureServerProps = {
     alternateLinkMessage?: string;
     alternateLinkText?: string;
     alternateLinkURL?: string;
-    onConnect: (data: TeamWithIndex) => void;
+    onConnect: (data: UniqueServer) => void;
 };
 
 function ConfigureServer({
-    currentTeams,
-    team,
+    server,
+    prefillURL,
     mobileView,
     darkMode,
     messageTitle,
@@ -54,58 +75,185 @@ function ConfigureServer({
     const {
         name: prevName,
         url: prevURL,
-        order = 0,
-        index = NaN,
-    } = team || {};
+        id,
+    } = server || {};
 
+    const mounted = useRef(false);
     const [transition, setTransition] = useState<'inFromRight' | 'outToLeft'>();
-    const [name, setName] = useState(prevName || '');
-    const [url, setUrl] = useState(prevURL || '');
+    const [name, setName] = useState(prevName ?? '');
+    const [host, setHost] = useState(getProjectHostFromURL(prevURL ?? prefillURL ?? ''));
+    const [url, setUrl] = useState(prevURL ?? prefillURL ?? getProjectURLFromHost(getProjectHostFromURL(prevURL ?? prefillURL ?? '')));
     const [nameError, setNameError] = useState('');
-    const [urlError, setURLError] = useState('');
+    const [urlError, setURLError] = useState<{type: STATUS; value: string}>();
     const [showContent, setShowContent] = useState(false);
     const [waiting, setWaiting] = useState(false);
 
-    const canSave = name && url && !nameError && !urlError;
+    const [validating, setValidating] = useState(false);
+    const validationTimestamp = useRef<number>();
+    const validationTimeout = useRef<NodeJS.Timeout>();
+    const editing = useRef(false);
+    const canSave = Boolean(name && url && !nameError && !validating && urlError && urlError.type !== STATUS.ERROR);
 
     useEffect(() => {
         setTransition('inFromRight');
         setShowContent(true);
-    }, []);
+        mounted.current = true;
 
-    const checkProtocolInURL = (checkURL: string): Promise<string> => {
-        checkURL = `https://${checkURL}.chat.platrum.ru`;
-        if (urlUtils.startsWithProtocol(checkURL)) {
-            return Promise.resolve(checkURL);
+        if (url) {
+            fetchValidationResult(url);
         }
 
-        return new Promise((resolve) => {
-            let eventCount = 0;
+        return () => {
+            mounted.current = false;
+            clearTimeout(validationTimeout.current as unknown as number);
+        };
+    }, []);
 
-            const handler = (event: {data: {type: string; data: string | Error}}) => {
-                let newURL = checkURL;
-
-                if (event.data.type === PING_DOMAIN_RESPONSE) {
-                    if (event.data.data instanceof Error) {
-                        console.error(`Could not ping url: ${checkURL}`);
-                    } else {
-                        newURL = `${event.data.data}://${checkURL}`;
-                        setUrl(newURL);
-                    }
-
-                    window.removeEventListener('message', handler);
-                    resolve(newURL);
-                } else if (eventCount >= 3) {
-                    window.removeEventListener('message', handler);
-                    resolve(newURL);
-                }
-
-                eventCount++;
-            };
-
-            window.addEventListener('message', handler);
-            window.postMessage({type: PING_DOMAIN, data: checkURL}, window.location.href);
+    const fetchValidationResult = (urlToValidate: string) => {
+        setValidating(true);
+        setURLError({
+            type: STATUS.INFO,
+            value: formatMessage({id: 'renderer.components.configureServer.url.validating', defaultMessage: 'Validating...'}),
         });
+
+        const requestTime = Date.now();
+        validationTimestamp.current = requestTime;
+        validateURL(urlToValidate).then(({validatedURL, message}) => {
+            if (editing.current) {
+                setValidating(false);
+                setURLError(undefined);
+                return;
+            }
+            if (!validationTimestamp.current || requestTime < validationTimestamp.current) {
+                return;
+            }
+            if (validatedURL) {
+                setUrl(validatedURL);
+                const validatedHost = getProjectHostFromURL(validatedURL);
+                setHost(validatedHost);
+                setName(validatedHost);
+            }
+            if (message) {
+                setTransition(undefined);
+                setURLError(message);
+            } else {
+                setURLError(undefined);
+            }
+            setValidating(false);
+        });
+    };
+
+    const validateURL = async (serverURL: string) => {
+        const projectHost = getProjectHostFromURL(serverURL);
+        if (!projectHost.length) {
+            return {
+                validatedURL: serverURL,
+                message: {
+                    type: STATUS.ERROR,
+                    value: formatMessage({
+                        id: 'renderer.components.newServerModal.error.urlRequired',
+                        defaultMessage: 'Project host is required.',
+                    }),
+                },
+            };
+        }
+
+        if (!PROJECT_HOST_REGEX.test(projectHost)) {
+            return {
+                validatedURL: serverURL,
+                message: {
+                    type: STATUS.ERROR,
+                    value: formatMessage({
+                        id: 'renderer.components.newServerModal.error.urlIncorrectFormatting',
+                        defaultMessage: 'Project host is not formatted correctly.',
+                    }),
+                },
+            };
+        }
+
+        try {
+            const validationResult = await Promise.race([
+                window.desktop.validateServerURL(serverURL),
+                new Promise<never>((_, reject) => {
+                    setTimeout(() => reject(new Error('validation timeout')), VALIDATION_TIMEOUT_MS);
+                }),
+            ]);
+
+            if (!validationResult.serverVersion &&
+                validationResult.status !== URLValidationStatus.Missing &&
+                validationResult.status !== URLValidationStatus.Invalid) {
+                return {
+                    validatedURL: validationResult.validatedURL ?? serverURL,
+                    message: {
+                        type: STATUS.ERROR,
+                        value: formatMessage({
+                            id: 'renderer.components.configureServer.url.versionUnavailable',
+                            defaultMessage: 'Could not validate project host. Please check the host and try again.',
+                        }),
+                    },
+                };
+            }
+
+            let message;
+            if (validationResult.status === URLValidationStatus.Missing) {
+                message = {
+                    type: STATUS.ERROR,
+                    value: formatMessage({
+                        id: 'renderer.components.newServerModal.error.urlRequired',
+                        defaultMessage: 'Project host is required.',
+                    }),
+                };
+            } else if (validationResult.status === URLValidationStatus.Invalid) {
+                message = {
+                    type: STATUS.ERROR,
+                    value: formatMessage({
+                        id: 'renderer.components.newServerModal.error.urlIncorrectFormatting',
+                        defaultMessage: 'Project host is not formatted correctly.',
+                    }),
+                };
+            } else if (validationResult.status === URLValidationStatus.Insecure) {
+                message = {
+                    type: STATUS.WARNING,
+                    value: formatMessage({id: 'renderer.components.configureServer.url.insecure', defaultMessage: 'Your project URL is potentially insecure. For best results, use a URL with the HTTPS protocol.'}),
+                };
+            } else if (validationResult.status === URLValidationStatus.NotMattermost) {
+                message = {
+                    type: STATUS.ERROR,
+                    value: formatMessage({id: 'renderer.components.configureServer.url.notMattermost', defaultMessage: 'The project host provided does not appear to point to a valid project. Please verify the host and check your connection.'}),
+                };
+            } else if (validationResult.status === URLValidationStatus.URLNotMatched) {
+                message = {
+                    type: STATUS.WARNING,
+                    value: formatMessage({id: 'renderer.components.configureServer.url.urlNotMatched', defaultMessage: 'The project host does not match your project settings. Please verify the host.'}),
+                };
+            } else if (validationResult.status === URLValidationStatus.URLUpdated) {
+                message = {
+                    type: STATUS.INFO,
+                    value: formatMessage({id: 'renderer.components.configureServer.url.urlUpdated', defaultMessage: 'The project host was adjusted to match your project settings.'}),
+                };
+            } else if (validationResult.status === URLValidationStatus.OK) {
+                message = {
+                    type: STATUS.SUCCESS,
+                    value: formatMessage({id: 'renderer.components.configureServer.url.ok', defaultMessage: 'Project host is valid.'}),
+                };
+            }
+
+            return {
+                validatedURL: validationResult.validatedURL ?? serverURL,
+                message,
+            };
+        } catch (error) {
+            return {
+                validatedURL: serverURL,
+                message: {
+                    type: STATUS.ERROR,
+                    value: formatMessage({
+                        id: 'renderer.components.configureServer.url.validationFailed',
+                        defaultMessage: 'Could not validate project host. Please check your connection and try again.',
+                    }),
+                },
+            };
+        }
     };
 
     const validateName = () => {
@@ -113,48 +261,8 @@ function ConfigureServer({
 
         if (!newName) {
             return formatMessage({
-                id: 'renderer.components.newTeamModal.error.nameRequired',
+                id: 'renderer.components.newServerModal.error.nameRequired',
                 defaultMessage: 'Name is required.',
-            });
-        }
-
-        if (currentTeams.find(({name: existingName}) => existingName === newName)) {
-            return formatMessage({
-                id: 'renderer.components.newTeamModal.error.serverNameExists',
-                defaultMessage: 'A server with the same name already exists.',
-            });
-        }
-
-        return '';
-    };
-
-    const validateURL = async (fullURL: string) => {
-        return '';
-        if (!fullURL) {
-            return formatMessage({
-                id: 'renderer.components.newTeamModal.error.urlRequired',
-                defaultMessage: 'URL is required.',
-            });
-        }
-
-        if (!urlUtils.startsWithProtocol(fullURL)) {
-            return formatMessage({
-                id: 'renderer.components.newTeamModal.error.urlNeedsHttp',
-                defaultMessage: 'URL should start with http:// or https://.',
-            });
-        }
-
-        if (!urlUtils.isValidURL(fullURL)) {
-            return formatMessage({
-                id: 'renderer.components.newTeamModal.error.urlIncorrectFormatting',
-                defaultMessage: 'URL is not formatted correctly.',
-            });
-        }
-
-        if (currentTeams.find(({url: existingURL}) => existingURL === fullURL)) {
-            return formatMessage({
-                id: 'renderer.components.newTeamModal.error.serverUrlExists',
-                defaultMessage: 'A server with the same URL already exists.',
             });
         }
 
@@ -170,14 +278,25 @@ function ConfigureServer({
     };
 
     const handleURLOnChange = ({target: {value}}: React.ChangeEvent<HTMLInputElement>) => {
-        setName(value);
-        setUrl(value);
-        return;
-        setUrl(value);
+        const projectHost = getProjectHostFromURL(value);
+        setHost(projectHost);
+        setName(projectHost);
+        const serverUrl = getProjectURLFromHost(projectHost);
+        setUrl(serverUrl);
 
         if (urlError) {
-            setURLError('');
+            setURLError(undefined);
         }
+
+        editing.current = true;
+        clearTimeout(validationTimeout.current as unknown as number);
+        validationTimeout.current = setTimeout(() => {
+            if (!mounted.current) {
+                return;
+            }
+            editing.current = false;
+            fetchValidationResult(serverUrl);
+        }, VALIDATION_DEBOUNCE_MS);
     };
 
     const handleOnSaveButtonClick = (e: React.MouseEvent) => {
@@ -208,24 +327,13 @@ function ConfigureServer({
             return;
         }
 
-        const fullURL = await checkProtocolInURL(url.trim());
-        const urlError = await validateURL(fullURL);
-
-        if (urlError) {
-            setTransition(undefined);
-            setURLError(urlError);
-            setWaiting(false);
-            return;
-        }
-
         setTransition('outToLeft');
 
         setTimeout(() => {
             onConnect({
-                url: fullURL,
+                url,
                 name,
-                index,
-                order,
+                id,
             });
         }, MODAL_TRANSITION_TIMEOUT);
     };
@@ -274,40 +382,52 @@ function ConfigureServer({
                     {!mobileView && getAlternateLink()}
                     <div className='ConfigureServer__content'>
                         <div className={classNames('ConfigureServer__message', transition)}>
+                            {false && <div className='ConfigureServer__message-img'>
+                                <ServerImage/>
+                            </div>}
                             <h1 className='ConfigureServer__message-title'>
-                                {messageTitle || formatMessage({id: 'renderer.components.configureServer.title', defaultMessage: 'Let’s connect to a server'})}
+                                {messageTitle || formatMessage({id: 'renderer.components.configureServer.title', defaultMessage: 'Let’s connect to a project'})}
                             </h1>
                             <p className='ConfigureServer__message-subtitle'>
                                 {false && (messageSubtitle || (
                                     <FormattedMessage
                                         id='renderer.components.configureServer.subtitle'
-                                        defaultMessage='Set up your first server to connect to your<br></br>team’s communication hub'
+                                        defaultMessage='Set up your first project to connect to your<br></br>team’s communication hub'
                                         values={{
                                             br: (x: React.ReactNode) => (<><br/>{x}</>),
                                         }}
                                     />))
                                 }
                             </p>
-                            {false && <div className='ConfigureServer__message-img'>
-                                <img
-                                    src={womanLaptop}
-                                    draggable={false}
-                                />
-                            </div>}
                         </div>
-                        <div className={classNames('ConfigureServer__card', transition, {'with-error': nameError || urlError})}>
+                        <div className={classNames('ConfigureServer__card', transition, {'with-error': nameError || urlError?.type === STATUS.ERROR})}>
                             <div
                                 className='ConfigureServer__card-content'
                                 onKeyDown={handleOnCardEnterKeyDown}
                                 tabIndex={0}
                             >
                                 <p className='ConfigureServer__card-title'>
-                                    {cardTitle || formatMessage({id: 'renderer.components.configureServer.cardtitle', defaultMessage: 'Enter your server details'})}
+                                    {cardTitle || formatMessage({id: 'renderer.components.configureServer.cardtitle', defaultMessage: 'Enter your project host'})}
                                 </p>
                                 <div className='ConfigureServer__card-form'>
+                                    <Input
+                                        name='url'
+                                        className='ConfigureServer__card-form-input'
+                                        type='text'
+                                        inputSize={SIZE.LARGE}
+                                        value={host}
+                                        onChange={handleURLOnChange}
+                                        customMessage={urlError ?? ({
+                                            type: STATUS.INFO,
+                                            value: formatMessage({id: 'renderer.components.configureServer.url.info', defaultMessage: 'Enter your project host, for example: example'}),
+                                        })}
+                                        placeholder={formatMessage({id: 'renderer.components.configureServer.url.placeholder', defaultMessage: 'Project host'})}
+                                        disabled={waiting}
+                                    />
                                     {false && <Input
                                         name='name'
                                         className='ConfigureServer__card-form-input'
+                                        containerClassName='ConfigureServer__card-form-input-container'
                                         type='text'
                                         inputSize={SIZE.LARGE}
                                         value={name}
@@ -317,40 +437,22 @@ function ConfigureServer({
                                             value: nameError,
                                         }) : ({
                                             type: STATUS.INFO,
-                                            value: formatMessage({id: 'renderer.components.configureServer.name.info', defaultMessage: 'The name that will be displayed in your server list'}),
+                                            value: formatMessage({id: 'renderer.components.configureServer.name.info', defaultMessage: 'The name that will be displayed in your project list'}),
                                         })}
-                                        placeholder={formatMessage({id: 'renderer.components.configureServer.name.placeholder', defaultMessage: 'Server display name'})}
+                                        placeholder={formatMessage({id: 'renderer.components.configureServer.name.placeholder', defaultMessage: 'Project display name'})}
                                         disabled={waiting}
-                                        darkMode={darkMode}
                                     />}
-                                    <Input
-                                        name='url'
-                                        className='ConfigureServer__card-form-input'
-                                        containerClassName='ConfigureServer__card-form-input-container'
-                                        type='text'
-                                        inputSize={SIZE.LARGE}
-                                        value={url}
-                                        onChange={handleURLOnChange}
-                                        customMessage={urlError ? ({
-                                            type: STATUS.ERROR,
-                                            value: urlError,
-                                        }) : ({
-                                            type: STATUS.INFO,
-                                            value: formatMessage({id: 'renderer.components.configureServer.url.info', defaultMessage: 'The URL of your Mattermost server'}),
-                                        })}
-                                        placeholder={formatMessage({id: 'renderer.components.configureServer.url.placeholder', defaultMessage: 'Server URL'})}
-                                        disabled={waiting}
-                                        darkMode={darkMode}
-                                    />
                                     <SaveButton
                                         id='connectConfigureServer'
                                         extraClasses='ConfigureServer__card-form-button'
                                         saving={waiting}
                                         onClick={handleOnSaveButtonClick}
-                                        defaultMessage={formatMessage({id: 'renderer.components.configureServer.connect.default', defaultMessage: 'Connect'})}
+                                        defaultMessage={urlError?.type === STATUS.WARNING ?
+                                            formatMessage({id: 'renderer.components.configureServer.connect.override', defaultMessage: 'Connect anyway'}) :
+                                            formatMessage({id: 'renderer.components.configureServer.connect.default', defaultMessage: 'Connect'})
+                                        }
                                         savingMessage={formatMessage({id: 'renderer.components.configureServer.connect.saving', defaultMessage: 'Connecting…'})}
                                         disabled={!canSave}
-                                        darkMode={darkMode}
                                     />
                                 </div>
                             </div>

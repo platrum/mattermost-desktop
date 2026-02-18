@@ -1,12 +1,10 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {useRef} from 'react';
-import {DownloadedItem} from 'types/downloads';
-
 import classNames from 'classnames';
+import React, {useRef} from 'react';
 
-import {TOGGLE_DOWNLOADS_DROPDOWN_MENU} from 'common/communication';
+import type {DownloadedItem} from 'types/downloads';
 
 type OwnProps = {
     activeItem?: DownloadedItem;
@@ -22,13 +20,10 @@ const ThreeDotButton = ({item, activeItem, visible}: OwnProps) => {
         e.stopPropagation();
 
         const coords = buttonElement.current?.getBoundingClientRect();
-        window.postMessage({
-            type: TOGGLE_DOWNLOADS_DROPDOWN_MENU,
-            payload: {
-                coordinates: coords?.toJSON(),
-                item,
-            },
-        }, window.location.href);
+        window.desktop.downloadsDropdown.toggleDownloadsDropdownMenu({
+            coordinates: coords?.toJSON(),
+            item,
+        });
     };
 
     return (

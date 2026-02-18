@@ -3,29 +3,24 @@
 
 import React from 'react';
 import {Modal, Button} from 'react-bootstrap';
-import {FormattedMessage, injectIntl, IntlShape} from 'react-intl';
+import type {IntlShape} from 'react-intl';
+import {FormattedMessage, injectIntl} from 'react-intl';
 
-import {PermissionType} from 'types/trustedOrigin';
-
-import {ModalMessage} from 'types/modals';
-
-import urlUtil from 'common/utils/url';
-import {t} from 'common/utils/util';
-import {MODAL_INFO} from 'common/communication';
 import {PERMISSION_DESCRIPTION} from 'common/permissions';
+import {parseURL} from 'common/utils/url';
+import {t} from 'common/utils/util';
+
+import type {PermissionModalInfo} from 'types/modals';
 
 type Props = {
     handleDeny: React.MouseEventHandler<HTMLButtonElement>;
     handleGrant: React.MouseEventHandler<HTMLButtonElement>;
-    getPermissionInfo: () => void;
+    getPermissionInfo: () => Promise<PermissionModalInfo>;
     openExternalLink: (protocol: string, url: string) => void;
     intl: IntlShape;
 };
 
-type State = {
-    url?: string;
-    permission?: PermissionType;
-}
+type State = Partial<PermissionModalInfo>;
 
 class PermissionModal extends React.PureComponent<Props, State> {
     constructor(props: Props) {
@@ -33,26 +28,13 @@ class PermissionModal extends React.PureComponent<Props, State> {
         this.state = {};
     }
 
-    componentDidMount() {
-        window.addEventListener('message', this.handlePermissionInfoMessage);
+    getPermissionInfo = async () => {
+        const {url, permission} = await this.props.getPermissionInfo();
+        this.setState({url, permission});
+    };
 
-        this.props.getPermissionInfo();
-    }
-
-    componentWillUnmount() {
-        window.removeEventListener('message', this.handlePermissionInfoMessage);
-    }
-
-    handlePermissionInfoMessage = (event: {data: ModalMessage<{url: string; permission: PermissionType}>}) => {
-        switch (event.data.type) {
-        case MODAL_INFO: {
-            const {url, permission} = event.data.data;
-            this.setState({url, permission});
-            break;
-        }
-        default:
-            break;
-        }
+    async componentDidMount() {
+        await this.getPermissionInfo();
     }
 
     getModalTitle() {
@@ -61,7 +43,7 @@ class PermissionModal extends React.PureComponent<Props, State> {
         }
 
         const permission = this.props.intl.formatMessage({id: PERMISSION_DESCRIPTION[this.state.permission!]});
-        return this.props.intl.formatMessage({id: 'renderer.modals.permission.permissionModal.title', defaultMessage: '{permission} Required'}, {permission});
+        return this.props.intl.formatMessage({id: 'renderer.modals.permission.permissionModal.title', defaultMessage: '{permission} required'}, {permission});
     }
 
     getModalBody() {
@@ -70,14 +52,14 @@ class PermissionModal extends React.PureComponent<Props, State> {
         }
 
         const {url, permission} = this.state;
-        const originDisplay = url ? urlUtil.getHost(url) : this.props.intl.formatMessage({id: 'renderer.modals.permission.permissionModal.unknownOrigin', defaultMessage: 'unknown origin'});
-        const originLink = url ? originDisplay : '';
+        const originDisplay = url ? parseURL(url)?.origin : this.props.intl.formatMessage({id: 'renderer.modals.permission.permissionModal.unknownOrigin', defaultMessage: 'unknown origin'});
+        const originLink = originDisplay ?? '';
 
         const click = (e: React.MouseEvent<HTMLAnchorElement>) => {
             e.preventDefault();
             let parseUrl;
             try {
-                parseUrl = urlUtil.parseURL(originLink);
+                parseUrl = parseURL(originLink);
                 this.props.openExternalLink(parseUrl!.protocol, originLink);
             } catch (err) {
                 console.error(`invalid url ${originLink} supplied to externallink: ${err}`);
@@ -89,7 +71,7 @@ class PermissionModal extends React.PureComponent<Props, State> {
                 <p>
                     <FormattedMessage
                         id='renderer.modals.permission.permissionModal.body'
-                        defaultMessage={'A site that\'s not included in your Mattermost server configuration requires access for {permission}.'}
+                        defaultMessage={'A site that\'s not included in your configured project list requires access for {permission}.'}
                         values={{
                             permission: this.props.intl.formatMessage({id: PERMISSION_DESCRIPTION[permission!]}),
                         }}
