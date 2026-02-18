@@ -4,9 +4,7 @@
 import React from 'react';
 import {IntlProvider as BaseIntlProvider} from 'react-intl';
 
-import {GET_LANGUAGE_INFORMATION, RETRIEVED_LANGUAGE_INFORMATION} from 'common/communication';
-
-import {Language} from '../../i18n/i18n';
+import type {Language} from '../../i18n/i18n';
 
 type State = {
     language?: Language;
@@ -18,22 +16,14 @@ export default class IntlProvider extends React.PureComponent<any, State> {
         this.state = {};
     }
 
-    componentDidMount() {
-        window.addEventListener('message', this.handleMessageEvent);
-        window.postMessage({type: GET_LANGUAGE_INFORMATION});
+    async componentDidMount() {
+        await this.getLanguageInformation();
     }
 
-    componentWillUnmount() {
-        window.removeEventListener('message', this.handleMessageEvent);
-    }
-
-    handleMessageEvent = (event: MessageEvent<{type: string; data: Language}>) => {
-        if (event.data.type === RETRIEVED_LANGUAGE_INFORMATION) {
-            this.setState({
-                language: event.data.data,
-            });
-        }
-    }
+    getLanguageInformation = async () => {
+        const language = await window.desktop.getLanguageInformation();
+        this.setState({language});
+    };
 
     render() {
         if (!this.state.language) {

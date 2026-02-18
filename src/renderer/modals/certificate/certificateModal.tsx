@@ -1,15 +1,10 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {Certificate} from 'electron/renderer';
+import type {Certificate} from 'electron/renderer';
 import React, {Fragment} from 'react';
 import {Modal, Button, Table, Row, Col} from 'react-bootstrap';
 import {FormattedMessage} from 'react-intl';
-
-import {CertificateModalData} from 'types/certificate';
-import {ModalMessage} from 'types/modals';
-
-import {MODAL_INFO} from 'common/communication';
 
 import IntlProvider from 'renderer/intl_provider';
 
@@ -18,7 +13,7 @@ import ShowCertificateModal from '../../components/showCertificateModal';
 type Props = {
     onSelect: (cert: Certificate) => void;
     onCancel?: () => void;
-    getCertInfo: () => void;
+    getCertInfo: () => Promise<{url: string; list: Certificate[]}>;
 }
 
 type State = {
@@ -34,27 +29,14 @@ export default class SelectCertificateModal extends React.PureComponent<Props, S
         this.state = {};
     }
 
-    componentDidMount() {
-        window.addEventListener('message', this.handleCertInfoMessage);
-
-        this.props.getCertInfo();
+    async componentDidMount() {
+        await this.getCertInfo();
     }
 
-    componentWillUnmount() {
-        window.removeEventListener('message', this.handleCertInfoMessage);
-    }
-
-    handleCertInfoMessage = (event: {data: ModalMessage<CertificateModalData>}) => {
-        switch (event.data.type) {
-        case MODAL_INFO: {
-            const {url, list} = event.data.data;
-            this.setState({url, list});
-            break;
-        }
-        default:
-            break;
-        }
-    }
+    getCertInfo = async () => {
+        const {url, list} = await this.props.getCertInfo();
+        this.setState({url, list});
+    };
 
     selectfn = (index: number) => {
         return (() => {
@@ -100,7 +82,7 @@ export default class SelectCertificateModal extends React.PureComponent<Props, S
                 defaultMessage='No certificates available'
             />
         </td><td/></tr></Fragment>);
-    }
+    };
 
     getSelectedCert = () => {
         if (this.state.list && this.state.selectedIndex !== undefined) {
@@ -114,16 +96,16 @@ export default class SelectCertificateModal extends React.PureComponent<Props, S
         if (cert) {
             this.props.onSelect(cert);
         }
-    }
+    };
 
     handleCertificateInfo = () => {
         const certificate = this.getSelectedCert();
         this.setState({showCertificate: certificate});
-    }
+    };
 
     certificateInfoClose = () => {
         this.setState({showCertificate: undefined});
-    }
+    };
 
     render() {
         if (this.state.showCertificate) {
@@ -206,7 +188,7 @@ export default class SelectCertificateModal extends React.PureComponent<Props, S
                                     >
                                         <FormattedMessage
                                             id='renderer.modals.certificate.certificateModal.certInfoButton'
-                                            defaultMessage='Certificate Information'
+                                            defaultMessage='Certificate information'
                                         />
                                     </Button>
                                 </Col>

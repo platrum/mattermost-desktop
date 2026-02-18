@@ -1,10 +1,10 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
+import type {Certificate} from 'electron/renderer';
 import React, {Fragment} from 'react';
 import {Modal, Button, Row, Col} from 'react-bootstrap';
 import {FormattedMessage} from 'react-intl';
-import {Certificate} from 'electron/renderer';
 
 type Props = {
     certificate: Certificate;
@@ -26,7 +26,7 @@ export default class ShowCertificateModal extends React.PureComponent<Props, Sta
     handleOk = () => {
         this.setState({certificate: undefined});
         this.props.onOk();
-    }
+    };
 
     render() {
         const certificateSection = (descriptor: React.ReactNode) => {
@@ -57,7 +57,7 @@ export default class ShowCertificateModal extends React.PureComponent<Props, Sta
                     <Modal.Body>
                         <FormattedMessage
                             id='renderer.components.showCertificateModal.noCertSelected'
-                            defaultMessage='No certificate Selected'
+                            defaultMessage='No certificate selected'
                         />
                     </Modal.Body>
                 </Modal>
@@ -90,13 +90,13 @@ export default class ShowCertificateModal extends React.PureComponent<Props, Sta
                         {certificateSection(
                             <FormattedMessage
                                 id='renderer.components.showCertificateModal.subjectName'
-                                defaultMessage='Subject Name'
+                                defaultMessage='Subject name'
                             />,
                         )}
                         {certificateItem(
                             <FormattedMessage
                                 id='renderer.components.showCertificateModal.commonName'
-                                defaultMessage='Common Name'
+                                defaultMessage='Common name'
                             />,
                             this.state.certificate?.subject.commonName,
                         )}
@@ -105,13 +105,13 @@ export default class ShowCertificateModal extends React.PureComponent<Props, Sta
                         {certificateSection(
                             <FormattedMessage
                                 id='renderer.components.showCertificateModal.issuerName'
-                                defaultMessage='Issuer Name'
+                                defaultMessage='Issuer name'
                             />,
                         )}
                         {certificateItem(
                             <FormattedMessage
                                 id='renderer.components.showCertificateModal.commonName'
-                                defaultMessage='Common Name'
+                                defaultMessage='Common name'
                             />,
                             this.state.certificate?.issuer.commonName,
                         )}
@@ -120,21 +120,21 @@ export default class ShowCertificateModal extends React.PureComponent<Props, Sta
                         {certificateItem(
                             <FormattedMessage
                                 id='renderer.components.showCertificateModal.serialNumber'
-                                defaultMessage='Serial Number'
+                                defaultMessage='Serial number'
                             />,
                             this.state.certificate?.serialNumber,
                         )}
                         {certificateItem(
                             <FormattedMessage
                                 id='renderer.components.showCertificateModal.notValidBefore'
-                                defaultMessage='Not Valid Before'
+                                defaultMessage='Not valid before'
                             />,
                             creation.toLocaleString(dateLocale, dateDisplayOptions),
                         )}
                         {certificateItem(
                             <FormattedMessage
                                 id='renderer.components.showCertificateModal.notValidAfter'
-                                defaultMessage='Not Valid After'
+                                defaultMessage='Not valid after'
                             />,
                             expiration.toLocaleString(dateLocale, dateDisplayOptions),
                         )}
@@ -143,7 +143,7 @@ export default class ShowCertificateModal extends React.PureComponent<Props, Sta
                         {certificateSection(
                             <FormattedMessage
                                 id='renderer.components.showCertificateModal.publicKeyInfo'
-                                defaultMessage='Public Key Info'
+                                defaultMessage='Public key info'
                             />,
                         )}
                         {certificateItem(

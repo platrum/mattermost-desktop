@@ -4,9 +4,9 @@
 import React, {useCallback} from 'react';
 import {useIntl} from 'react-intl';
 
-import {DownloadedItem} from 'types/downloads';
-
 import {getDownloadingFileStatus, getFileSizeOrBytesProgress, prettyETA} from 'renderer/utils';
+
+import type {DownloadedItem} from 'types/downloads';
 
 type OwnProps = {
     item: DownloadedItem;
@@ -15,7 +15,7 @@ type OwnProps = {
 const FileSizeAndStatus = ({item}: OwnProps) => {
     const translate = useIntl();
 
-    const {totalBytes, receivedBytes, addedAt} = item;
+    const {totalBytes, receivedBytes, addedAt} = item || {};
 
     const getRemainingTime = useCallback(() => {
         const elapsedMs = Date.now() - addedAt;

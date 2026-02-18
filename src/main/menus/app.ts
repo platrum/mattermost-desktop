@@ -3,17 +3,29 @@
 // See LICENSE.txt for license information.
 'use strict';
 
-import {app, ipcMain, Menu, MenuItemConstructorOptions, MenuItem, session, shell, WebContents, clipboard} from 'electron';
+import type {MenuItemConstructorOptions, MenuItem} from 'electron';
+import {app, ipcMain, Menu, session, shell, clipboard} from 'electron';
+import log from 'electron-log';
 
-import {BROWSER_HISTORY_BUTTON, OPEN_TEAMS_DROPDOWN, SHOW_NEW_SERVER_MODAL} from 'common/communication';
+import ServerViewState from 'app/serverViewState';
+import {OPEN_SERVERS_DROPDOWN, SHOW_NEW_SERVER_MODAL} from 'common/communication';
+import type {Config} from 'common/config';
+import {DEFAULT_EE_REPORT_PROBLEM_LINK, DEFAULT_TE_REPORT_PROBLEM_LINK} from 'common/constants';
+import ServerManager from 'common/servers/serverManager';
 import {t} from 'common/utils/util';
-import {getTabDisplayName, TabType} from 'common/tabs/TabView';
-import {Config} from 'common/config';
-
-import {localizeMessage} from 'main/i18nManager';
-import WindowManager from 'main/windows/windowManager';
-import {UpdateManager} from 'main/autoUpdater';
+import {getViewDisplayName} from 'common/views/View';
+import type {ViewType} from 'common/views/View';
+import {clearAllData, clearDataForServer} from 'main/app/utils';
+import type {UpdateManager} from 'main/autoUpdater';
+import DeveloperMode from 'main/developerMode';
+import Diagnostics from 'main/diagnostics';
 import downloadsManager from 'main/downloadsManager';
+import {localizeMessage} from 'main/i18nManager';
+import {getLocalPreload} from 'main/utils';
+import ModalManager from 'main/views/modalManager';
+import ViewManager from 'main/views/viewManager';
+import CallsWidgetWindow from 'main/windows/callsWidgetWindow';
+import MainWindow from 'main/windows/mainWindow';
 
 export function createTemplate(config: Config, updateManager: UpdateManager) {
     const separatorItem: MenuItemConstructorOptions = {
@@ -41,13 +53,24 @@ export function createTemplate(config: Config, updateManager: UpdateManager) {
         label: settingsLabel,
         accelerator: 'CmdOrCtrl+,',
         click() {
-            WindowManager.showSettingsWindow();
+            const mainWindow = MainWindow.get();
+            if (!mainWindow) {
+                return;
+            }
+
+            ModalManager.addModal(
+                'settingsModal',
+                'mattermost-desktop://renderer/settings.html',
+                getLocalPreload('internalAPI.js'),
+                null,
+                mainWindow,
+            );
         },
     });
 
-    if (config.data?.enableServerManagement === true) {
+    if (config.enableServerManagement === true && ServerManager.hasServers()) {
         platformAppMenu.push({
-            label: localizeMessage('main.menus.app.file.signInToAnotherServer', 'Sign in to Another Server'),
+            label: localizeMessage('main.menus.app.file.signInToAnotherServer', 'Sign in to another project'),
             click() {
                 ipcMain.emit(SHOW_NEW_SERVER_MODAL);
             },
@@ -61,10 +84,10 @@ export function createTemplate(config: Config, updateManager: UpdateManager) {
                 label: localizeMessage('main.menus.app.file.hide', 'Hide {appName}', {appName}),
             }, {
                 role: 'hideOthers',
-                label: localizeMessage('main.menus.app.file.hideOthers', 'Hide Others'),
+                label: localizeMessage('main.menus.app.file.hideOthers', 'Hide others'),
             }, {
                 role: 'unhide',
-                label: localizeMessage('main.menus.app.file.unhide', 'Show All'),
+                label: localizeMessage('main.menus.app.file.unhide', 'Show all'),
             }, separatorItem, {
                 role: 'quit',
                 label: localizeMessage('main.menus.app.file.quit', 'Quit {appName}', {appName}),
@@ -110,45 +133,137 @@ export function createTemplate(config: Config, updateManager: UpdateManager) {
             accelerator: 'CmdOrCtrl+V',
         }, {
             role: 'pasteAndMatchStyle',
-            label: localizeMessage('main.menus.app.edit.pasteAndMatchStyle', 'Paste and Match Style'),
+            label: localizeMessage('main.menus.app.edit.pasteAndMatchStyle', 'Paste and match style'),
             accelerator: 'CmdOrCtrl+SHIFT+V',
         }, {
             role: 'selectall',
-            label: localizeMessage('main.menus.app.edit.selectAll', 'Select All'),
+            label: localizeMessage('main.menus.app.edit.selectAll', 'Select all'),
             accelerator: 'CmdOrCtrl+A',
         }],
     });
 
-    const viewSubMenu = [{
+    const devToolsSubMenu: Electron.MenuItemConstructorOptions[] = [
+        {
+            label: localizeMessage('main.menus.app.view.devToolsAppWrapper', 'Developer tools for application wrapper'),
+            accelerator: (() => {
+                if (process.platform === 'darwin') {
+                    return 'Alt+Command+I';
+                }
+                return 'Ctrl+Shift+I';
+            })(),
+            click() {
+                const mainWindow = MainWindow.get();
+                if (!mainWindow) {
+                    return;
+                }
+
+                if (mainWindow.webContents.isDevToolsOpened()) {
+                    mainWindow.webContents.closeDevTools();
+                } else {
+                    mainWindow.webContents.openDevTools({mode: 'detach'});
+                }
+            },
+        },
+        {
+            label: localizeMessage('main.menus.app.view.devToolsCurrentServer', 'Developer tools for current project'),
+            click() {
+                ViewManager.getCurrentView()?.openDevTools();
+            },
+        },
+    ];
+
+    if (CallsWidgetWindow.isOpen()) {
+        devToolsSubMenu.push({
+            label: localizeMessage('main.menus.app.view.devToolsCurrentCallWidget', 'Developer tools for call widget'),
+            click() {
+                CallsWidgetWindow.openDevTools();
+            },
+        });
+
+        if (CallsWidgetWindow.isPopoutOpen()) {
+            devToolsSubMenu.push({
+                label: localizeMessage('main.menus.app.view.devToolsCurrentCallWidgetPopout', 'Developer tools for call widget pop-out'),
+                click() {
+                    CallsWidgetWindow.openPopoutDevTools();
+                },
+            });
+        }
+    }
+
+    if (DeveloperMode.enabled()) {
+        devToolsSubMenu.push(...[
+            separatorItem,
+            {
+                label: localizeMessage('main.menus.app.view.developerModeBrowserOnly', 'Browser only mode'),
+                type: 'checkbox' as const,
+                checked: DeveloperMode.get('browserOnly'),
+                click() {
+                    DeveloperMode.toggle('browserOnly');
+                },
+            },
+            {
+                label: localizeMessage('main.menus.app.view.developerModeDisableNotificationStorage', 'Disable notification storage'),
+                type: 'checkbox' as const,
+                checked: DeveloperMode.get('disableNotificationStorage'),
+                click() {
+                    DeveloperMode.toggle('disableNotificationStorage');
+                },
+            },
+            {
+                label: localizeMessage('main.menus.app.view.developerModeDisableUserActivityMonitor', 'Disable user activity monitor'),
+                type: 'checkbox' as const,
+                checked: DeveloperMode.get('disableUserActivityMonitor'),
+                click() {
+                    DeveloperMode.toggle('disableUserActivityMonitor');
+                },
+            },
+            {
+                label: localizeMessage('main.menus.app.view.developerModeDisableContextMenu', 'Disable context menu'),
+                type: 'checkbox' as const,
+                checked: DeveloperMode.get('disableContextMenu'),
+                click() {
+                    DeveloperMode.toggle('disableContextMenu');
+                },
+            },
+        ]);
+    }
+
+    const viewSubMenu: Electron.MenuItemConstructorOptions[] = [{
         label: localizeMessage('main.menus.app.view.find', 'Find..'),
         accelerator: 'CmdOrCtrl+F',
         click() {
-            WindowManager.sendToFind();
+            ViewManager.sendToFind();
         },
     }, {
         label: localizeMessage('main.menus.app.view.reload', 'Reload'),
         accelerator: 'CmdOrCtrl+R',
         click() {
-            WindowManager.reload();
+            ViewManager.reload();
         },
     }, {
-        label: localizeMessage('main.menus.app.view.clearCacheAndReload', 'Clear Cache and Reload'),
+        label: localizeMessage('main.menus.app.view.clearCacheAndReload', 'Clear cache and reload'),
         accelerator: 'Shift+CmdOrCtrl+R',
         click() {
             session.defaultSession.clearCache();
-            WindowManager.reload();
+            ViewManager.reload();
         },
-    }, {
-        role: 'togglefullscreen',
-        label: localizeMessage('main.menus.app.view.fullscreen', 'Toggle Full Screen'),
-        accelerator: isMac ? 'Ctrl+Cmd+F' : 'F11',
-    }, separatorItem, {
-        label: localizeMessage('main.menus.app.view.actualSize', 'Actual Size'),
+    }];
+
+    if (process.platform !== 'linux') {
+        viewSubMenu.push({
+            role: 'togglefullscreen',
+            label: localizeMessage('main.menus.app.view.fullscreen', 'Toggle full screen'),
+            accelerator: isMac ? 'Ctrl+Cmd+F' : 'F11',
+        });
+    }
+
+    viewSubMenu.push(separatorItem, {
+        label: localizeMessage('main.menus.app.view.actualSize', 'Actual size'),
         role: 'resetZoom',
         accelerator: 'CmdOrCtrl+0',
     }, {
         role: 'zoomIn',
-        label: localizeMessage('main.menus.app.view.zoomIn', 'Zoom In'),
+        label: localizeMessage('main.menus.app.view.zoomIn', 'Zoom in'),
         accelerator: 'CmdOrCtrl+=',
     }, {
         role: 'zoomIn',
@@ -156,7 +271,7 @@ export function createTemplate(config: Config, updateManager: UpdateManager) {
         accelerator: 'CmdOrCtrl+Shift+=',
     }, {
         role: 'zoomOut',
-        label: localizeMessage('main.menus.app.view.zoomOut', 'Zoom Out'),
+        label: localizeMessage('main.menus.app.view.zoomOut', 'Zoom out'),
         accelerator: 'CmdOrCtrl+-',
     }, {
         role: 'zoomOut',
@@ -170,36 +285,28 @@ export function createTemplate(config: Config, updateManager: UpdateManager) {
             return downloadsManager.openDownloadsDropdown();
         },
     }, separatorItem, {
-        label: localizeMessage('main.menus.app.view.devToolsAppWrapper', 'Developer Tools for Application Wrapper'),
-        accelerator: (() => {
-            if (process.platform === 'darwin') {
-                return 'Alt+Command+I';
-            }
-            return 'Ctrl+Shift+I';
-        })(),
-        click(item: Electron.MenuItem, focusedWindow?: WebContents) {
-            if (focusedWindow) {
-                // toggledevtools opens it in the last known position, so sometimes it goes below the browserview
-                if (focusedWindow.isDevToolsOpened()) {
-                    focusedWindow.closeDevTools();
-                } else {
-                    focusedWindow.openDevTools({mode: 'detach'});
-                }
-            }
+        id: 'clear-data-for-server',
+        label: localizeMessage('main.menus.app.view.clearDataForServer', 'Clear data for current project'),
+        async click() {
+            return clearDataForServer(ServerViewState.getCurrentServer());
         },
     }, {
-        label: localizeMessage('main.menus.app.view.devToolsCurrentServer', 'Developer Tools for Current Server'),
-        click() {
-            WindowManager.openBrowserViewDevTools();
+        id: 'clear-data',
+        label: localizeMessage('main.menus.app.view.clearAllData', 'Clear all data'),
+        async click() {
+            return clearAllData();
         },
-    }];
+    }, separatorItem, {
+        label: localizeMessage('main.menus.app.view.devToolsSubMenu', 'Developer tools'),
+        submenu: devToolsSubMenu,
+    });
 
     if (process.platform !== 'darwin' && process.platform !== 'win32') {
         viewSubMenu.push(separatorItem);
         viewSubMenu.push({
-            label: localizeMessage('main.menus.app.view.toggleDarkMode', 'Toggle Dark Mode'),
+            label: localizeMessage('main.menus.app.view.toggleDarkMode', 'Toggle dark mode'),
             click() {
-                config.toggleDarkModeManually();
+                config.set('darkMode', !config.darkMode);
             },
         });
     }
@@ -216,26 +323,19 @@ export function createTemplate(config: Config, updateManager: UpdateManager) {
             label: localizeMessage('main.menus.app.history.back', 'Back'),
             accelerator: process.platform === 'darwin' ? 'Cmd+[' : 'Alt+Left',
             click: () => {
-                const view = WindowManager.viewManager?.getCurrentView();
-                if (view && view.view.webContents.canGoBack() && !view.isAtRoot) {
-                    view.view.webContents.goBack();
-                    ipcMain.emit(BROWSER_HISTORY_BUTTON, null, view.name);
-                }
+                ViewManager.getCurrentView()?.goToOffset(-1);
             },
         }, {
             label: localizeMessage('main.menus.app.history.forward', 'Forward'),
             accelerator: process.platform === 'darwin' ? 'Cmd+]' : 'Alt+Right',
             click: () => {
-                const view = WindowManager.viewManager?.getCurrentView();
-                if (view && view.view.webContents.canGoForward()) {
-                    view.view.webContents.goForward();
-                    ipcMain.emit(BROWSER_HISTORY_BUTTON, null, view.name);
-                }
+                ViewManager.getCurrentView()?.goToOffset(1);
             },
         }],
     });
 
-    const teams = config.data?.teams || [];
+    const servers = ServerManager.getOrderedServers();
+    const currentServer = ServerManager.hasServers() ? ServerViewState.getCurrentServer() : undefined;
     const windowMenu = {
         id: 'window',
         label: localizeMessage('main.menus.app.window', '&Window'),
@@ -252,97 +352,147 @@ export function createTemplate(config: Config, updateManager: UpdateManager) {
         }, separatorItem,
         ] : []), {
             role: 'close',
-            label: isMac ? localizeMessage('main.menus.app.window.closeWindow', 'Close Window') : localizeMessage('main.menus.app.window.close', 'Close'),
+            label: isMac ? localizeMessage('main.menus.app.window.closeWindow', 'Close window') : localizeMessage('main.menus.app.window.close', 'Close'),
             accelerator: 'CmdOrCtrl+W',
-        }, separatorItem, {
-            label: localizeMessage('main.menus.app.window.showServers', 'Show Servers'),
+        }, separatorItem,
+        ...(ServerManager.hasServers() ? [{
+            label: localizeMessage('main.menus.app.window.showServers', 'Show projects'),
             accelerator: `${process.platform === 'darwin' ? 'Cmd+Ctrl' : 'Ctrl+Shift'}+S`,
             click() {
-                ipcMain.emit(OPEN_TEAMS_DROPDOWN);
+                ipcMain.emit(OPEN_SERVERS_DROPDOWN);
             },
-        }, ...teams.sort((teamA, teamB) => teamA.order - teamB.order).slice(0, 9).map((team, i) => {
+        }] : []),
+        ...servers.slice(0, 9).map((server, i) => {
             const items = [];
             items.push({
-                label: team.name,
+                label: server.name,
                 accelerator: `${process.platform === 'darwin' ? 'Cmd+Ctrl' : 'Ctrl+Shift'}+${i + 1}`,
                 click() {
-                    WindowManager.switchServer(team.name);
+                    ServerViewState.switchServer(server.id);
                 },
             });
-            if (WindowManager.getCurrentTeamName() === team.name) {
-                team.tabs.filter((tab) => tab.isOpen).sort((teamA, teamB) => teamA.order - teamB.order).slice(0, 9).forEach((tab, i) => {
+            if (currentServer?.id === server.id) {
+                ServerManager.getOrderedTabsForServer(server.id).slice(0, 9).forEach((view, i) => {
                     items.push({
-                        label: `    ${localizeMessage(`common.tabs.${tab.name}`, getTabDisplayName(tab.name as TabType))}`,
+                        label: `    ${localizeMessage(`common.tabs.${view.type}`, getViewDisplayName(view.type as ViewType))}`,
                         accelerator: `CmdOrCtrl+${i + 1}`,
                         click() {
-                            WindowManager.switchTab(team.name, tab.name);
+                            ViewManager.showById(view.id);
                         },
                     });
                 });
             }
             return items;
         }).flat(), separatorItem, {
-            label: localizeMessage('main.menus.app.window.selectNextTab', 'Select Next Tab'),
+            label: localizeMessage('main.menus.app.window.selectNextTab', 'Select next tab'),
             accelerator: 'Ctrl+Tab',
             click() {
-                WindowManager.selectNextTab();
+                ServerViewState.selectNextView();
             },
-            enabled: (teams.length > 1),
+            enabled: (servers.length > 1),
         }, {
-            label: localizeMessage('main.menus.app.window.selectPreviousTab', 'Select Previous Tab'),
+            label: localizeMessage('main.menus.app.window.selectPreviousTab', 'Select previous tab'),
             accelerator: 'Ctrl+Shift+Tab',
             click() {
-                WindowManager.selectPreviousTab();
+                ServerViewState.selectPreviousView();
             },
-            enabled: (teams.length > 1),
+            enabled: (servers.length > 1),
         }, ...(isMac ? [separatorItem, {
             role: 'front',
-            label: localizeMessage('main.menus.app.window.bringAllToFront', 'Bring All to Front'),
+            label: localizeMessage('main.menus.app.window.bringAllToFront', 'Bring all to front'),
         }] : []),
         ],
     };
     template.push(windowMenu);
+
+    const currentRemoteInfo = currentServer ? ServerManager.getRemoteInfo(currentServer.id) : undefined;
     const submenu = [];
     if (updateManager && config.canUpgrade) {
         if (updateManager.versionDownloaded) {
             submenu.push({
-                label: localizeMessage('main.menus.app.help.restartAndUpdate', 'Restart and Update'),
+                label: localizeMessage('main.menus.app.help.restartAndUpdate', 'Restart and update'),
                 click() {
                     updateManager.handleUpdate();
                 },
             });
         } else if (updateManager.versionAvailable) {
             submenu.push({
-                label: localizeMessage('main.menus.app.help.downloadUpdate', 'Download Update'),
+                label: localizeMessage('main.menus.app.help.downloadUpdate', 'Download update'),
                 click() {
                     updateManager.handleDownload();
                 },
             });
         } else {
             submenu.push({
-                label: localizeMessage('main.menus.app.help.checkForUpdates', 'Check for Updates'),
+                label: localizeMessage('main.menus.app.help.checkForUpdates', 'Check for updates'),
                 click() {
                     updateManager.checkForUpdates(true);
                 },
             });
         }
-    }
-    if (config.data?.helpLink) {
-        submenu.push({
-            label: localizeMessage('main.menus.app.help.learnMore', 'Learn More...'),
-            click() {
-                shell.openExternal(config.data!.helpLink);
-            },
-        });
         submenu.push(separatorItem);
     }
 
-    const version = localizeMessage('main.menus.app.help.versionString', 'Version {version}{commit}', {
+    const helpLink = currentRemoteInfo?.helpLink ?? config.helpLink;
+    if (helpLink) {
+        submenu.push({
+            label: localizeMessage('main.menus.app.help.userGuide', 'User guide'),
+            click() {
+                shell.openExternal(helpLink);
+            },
+        });
+    }
+    const academyLink = config.academyLink;
+    if (academyLink) {
+        submenu.push({
+            label: localizeMessage('main.menus.app.help.academy', 'Platrum Chat academy'),
+            click() {
+                shell.openExternal(academyLink);
+            },
+        });
+    }
+    submenu.push(separatorItem);
+
+    submenu.push({
+        id: 'Show logs',
+        label: localizeMessage('main.menus.app.help.ShowLogs', 'Show logs'),
+        click() {
+            shell.showItemInFolder(log.transports.file.getFile().path);
+        },
+    });
+
+    submenu.push({
+        id: 'diagnostics',
+        label: localizeMessage('main.menus.app.help.RunDiagnostics', 'Run diagnostics'),
+        click() {
+            Diagnostics.run();
+        },
+    });
+
+    let reportProblemLink = currentRemoteInfo?.reportProblemLink;
+    if (!reportProblemLink) {
+        switch (currentRemoteInfo?.licenseSku) {
+        case 'enterprise':
+        case 'professional':
+            reportProblemLink = DEFAULT_EE_REPORT_PROBLEM_LINK;
+            break;
+        default:
+            reportProblemLink = DEFAULT_TE_REPORT_PROBLEM_LINK;
+            break;
+        }
+    }
+    if (reportProblemLink) {
+        submenu.push({
+            label: localizeMessage('main.menus.app.help.reportProblem', 'Report a problem'),
+            click() {
+                shell.openExternal(reportProblemLink!);
+            },
+        });
+    }
+    submenu.push(separatorItem);
+
+    const version = localizeMessage('main.menus.app.help.versionString', 'Version {version}', {
         version: app.getVersion(),
-        // eslint-disable-next-line no-undef
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
-        commit: __HASH_VERSION__ ? localizeMessage('main.menus.app.help.commitString', ' commit: {hashVersion}', {hashVersion: __HASH_VERSION__}) : '',
     });
     submenu.push({
         label: version,
@@ -352,7 +502,7 @@ export function createTemplate(config: Config, updateManager: UpdateManager) {
         },
     });
 
-    // template.push({id: 'help', label: localizeMessage('main.menus.app.help', 'Hel&p'), submenu});
+    template.push({id: 'help', label: localizeMessage('main.menus.app.help', 'Hel&p'), submenu});
     return template;
 }
 

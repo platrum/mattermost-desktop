@@ -34,14 +34,19 @@ describe('application', function desc() {
         it('MM-T1304/MM-T1306 should open the app on the requested deep link', async () => {
             this.app = await env.getApp(['mattermost://github.com/test/url']);
             this.serverMap = await env.getServerMap(this.app);
+            if (!this.app.windows().some((window) => window.url().includes('github.com'))) {
+                await this.app.waitForEvent('window', {
+                    predicate: (window) => window.url().includes('github.com'),
+                });
+            }
             const mainWindow = this.app.windows().find((window) => window.url().includes('index'));
             const browserWindow = await this.app.browserWindow(mainWindow);
             const webContentsId = this.serverMap[`${config.teams[1].name}___TAB_MESSAGING`].webContentsId;
             const isActive = await browserWindow.evaluate((window, id) => {
-                return window.getBrowserViews().find((view) => view.webContents.id === id).webContents.getURL();
+                return window.contentView.children.find((view) => view.webContents.id === id).webContents.getURL();
             }, webContentsId);
-            isActive.should.equal('https://github.com/test/url');
-            const dropdownButtonText = await mainWindow.innerText('.TeamDropdownButton');
+            isActive.should.equal('https://github.com/test/url/');
+            const dropdownButtonText = await mainWindow.innerText('.ServerDropdownButton');
             dropdownButtonText.should.equal('github');
             await this.app.close();
         });
