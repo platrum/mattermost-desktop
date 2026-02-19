@@ -1,7 +1,7 @@
 {
   "name": "platrum-chat",
   "productName": "Platrum Chat",
-  "version": "5.11.3",
+  "version": "5.11.3-nightly.20260219",
   "description": "Platrum Chat",
   "main": "dist/index.js",
   "author": "Platrum <support@platrum.ru>",
